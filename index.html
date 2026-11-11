@@ -328,6 +328,14 @@
     font-size:11px; padding:6px 10px;
   }
   #devMenu label{ font-size:12px; color:#b99; cursor:pointer; }
+  .lbRow{
+    display:flex; justify-content:space-between; gap:8px; font-size:12px;
+    padding:6px 0; border-bottom:1px solid #2a1414; color:var(--bone);
+  }
+  .lbRow .lbRank{ color:var(--bloodbright); width:22px; flex-shrink:0; }
+  .lbRow .lbName{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:left; }
+  .lbRow .lbTime{ color:#998; }
+  .lbEmpty{ color:#765; font-size:12px; font-style:italic; padding:8px 0; }
   #devMenu input[type=checkbox]{ accent-color:#8a1414; margin-right:8px; vertical-align:middle; }
 </style>
 </head>
@@ -366,7 +374,26 @@
     <button class="spooky hidden" id="btnContinue">Continue</button>
     <button class="spooky" id="btnBegin">Enter, If You Dare</button>
     <button class="spooky" id="btnSettingsFromMenu" style="font-size:12px; padding:10px 24px;">Settings</button>
+    <button class="spooky" id="btnLeaderboardFromMenu" style="font-size:12px; padding:10px 24px;">Leaderboard</button>
     <div style="margin-top:48px; color:var(--bloodbright); font-size:15px; letter-spacing:1px; opacity:0.85;">Created by Henry Scheer and Oliver Clark</div>
+  </div>
+
+  <!-- LEADERBOARD -->
+  <div id="screen-leaderboard" class="fullscreen-ui hidden">
+    <h1 class="title" style="font-size:28px;letter-spacing:5px;">LEADERBOARD</h1>
+    <div class="note" style="max-width:560px; margin-bottom:16px;">Fastest escapes from everyone who's played Blackwood Asylum at this address. Runs marked <span style="color:#e05a4a;">🛠 DEV</span> used Developer Mode cheats.</div>
+    <div id="leaderboardStatus" style="color:#876; font-size:12px; margin-bottom:10px;"></div>
+    <div style="display:flex; gap:20px; flex-wrap:wrap; justify-content:center; max-width:700px;">
+      <div class="settingsPanel" style="width:300px;">
+        <h3>Normal</h3>
+        <div id="lbNormal"></div>
+      </div>
+      <div class="settingsPanel" style="width:300px;">
+        <h3>Nightmare</h3>
+        <div id="lbNightmare"></div>
+      </div>
+    </div>
+    <button class="spooky" id="btnLeaderboardBack" style="margin-top:20px;">Back</button>
   </div>
 
   <!-- CHARACTER SELECT -->
@@ -1161,6 +1188,7 @@ const state = {
   stunCharges:0,
   hasStunGun:false,
   stunGunCooldown:0,
+  usedCheatsThisRun:false,
   lastRoomId:-1,
   visitedRooms:{},
   scaredRooms:{},
@@ -1209,6 +1237,7 @@ function resetGameState(){
   state.notesCollected = 0;
   state.stunCharges = 0;
   state.hasStunGun = false;
+  state.usedCheatsThisRun = false;
   state.stunGunCooldown = 0;
   state.lastRoomId = -1;
   state.visitedRooms = {};
@@ -1414,6 +1443,55 @@ function closeSettings(){
   if(settingsReturnTo==='pause'){ show('pauseScreen'); }
   else { updateBestTimeLine(); updateContinueUI(); show('screen-menu'); }
 }
+
+/* =========================================================
+   LEADERBOARD — global, backed by a Netlify function + Blobs
+========================================================= */
+function formatLbTime(sec){ return formatTime(sec); }
+function renderLbList(containerId, entries){
+  const el_ = el(containerId);
+  if(!entries || entries.length===0){
+    el_.innerHTML = '<div class="lbEmpty">No times yet. Be the first to escape.</div>';
+    return;
+  }
+  el_.innerHTML = entries.map((e,i)=>{
+    const flag = e.cheated ? ' <span title="Achieved using Developer Mode" style="color:#e05a4a;">🛠 DEV</span>' : '';
+    return `<div class="lbRow"><span class="lbRank">#${i+1}</span><span class="lbName">${(e.name||'Guest').replace(/</g,'&lt;')}${flag}</span><span class="lbTime">${formatLbTime(e.time)}</span></div>`;
+  }).join('');
+}
+async function openLeaderboard(){
+  hide('screen-menu');
+  show('screen-leaderboard');
+  el('leaderboardStatus').textContent = 'Loading...';
+  el('lbNormal').innerHTML = '';
+  el('lbNightmare').innerHTML = '';
+  try{
+    const res = await fetch('/api/leaderboard');
+    if(!res.ok) throw new Error('bad response');
+    const data = await res.json();
+    renderLbList('lbNormal', data.normal);
+    renderLbList('lbNightmare', data.nightmare);
+    el('leaderboardStatus').textContent = '';
+  }catch(e){
+    el('leaderboardStatus').textContent = 'Leaderboard unavailable right now (needs the hosted site, not a local file).';
+    renderLbList('lbNormal', []);
+    renderLbList('lbNightmare', []);
+  }
+}
+function closeLeaderboard(){
+  hide('screen-leaderboard');
+  updateBestTimeLine(); updateContinueUI();
+  show('screen-menu');
+}
+async function submitScore(time, nightmare, cheated){
+  try{
+    await fetch('/api/leaderboard', {
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body: JSON.stringify({ name: currentUsername()||'Guest', time, character: state.character.name, nightmare: !!nightmare, cheated: !!cheated })
+    });
+  }catch(e){ /* offline or local file — silently skip */ }
+}
 function renderSettings(){
   const u = currentUsername();
   el('profileStatus').textContent = u ? `Logged in as: ${u}` : 'Playing as Guest (not signed in)';
@@ -1467,6 +1545,8 @@ function renderSettings(){
 }
 
 el('btnSettingsFromMenu').addEventListener('click', ()=> openSettings('menu'));
+el('btnLeaderboardFromMenu').addEventListener('click', openLeaderboard);
+el('btnLeaderboardBack').addEventListener('click', closeLeaderboard);
 el('btnSettingsFromPause').addEventListener('click', ()=> openSettings('pause'));
 el('btnSettingsBack').addEventListener('click', closeSettings);
 
@@ -1542,6 +1622,8 @@ el('btnDevDisable').addEventListener('click', ()=>{
   el('devCodeInput').value = '';
   renderSettings();
 });
+el('devMenu').addEventListener('change', ()=>{ state.usedCheatsThisRun = true; });
+el('devMenu').addEventListener('click', ()=>{ state.usedCheatsThisRun = true; });
 
 /* =========================================================
    JOURNAL
@@ -2258,6 +2340,8 @@ function winGame(){
   let stats = `Survived ${formatTime(state.elapsed)} · ${state.notesCollected}/${NOTES.length} pages found`;
   if(isBest) stats += '  —  NEW BEST TIME';
   if(unlocked.length) stats += `\nNew skin unlocked: ${unlocked.join(', ')} (see Settings)`;
+  if(state.usedCheatsThisRun){ stats += '\n(Dev tools were used — flagged as such on the leaderboard)'; }
+  submitScore(state.elapsed, state.nightmare, state.usedCheatsThisRun);
   el('winStats').textContent = stats;
   show('winScreen');
   el('hud').classList.add('hidden');
@@ -2459,54 +2543,76 @@ function drawExitSprite(scale){
 }
 function drawMonsterSprite(scale, proximity){
   ctx.scale(scale,scale);
-  const r = 18;
   const bodyAlpha = 0.32 + proximity*0.68;
+  const t = performance.now();
 
-  // long clawed, twitching limbs
+  // human arms, twitching at her sides — no props, no syringe, just hands
   ctx.globalAlpha = bodyAlpha;
-  ctx.strokeStyle = `rgb(${40+proximity*35|0},10,10)`; ctx.lineWidth = 3;
+  ctx.strokeStyle = `rgb(${205+proximity*15|0},${195+proximity*12|0},${182+proximity*10|0})`;
+  ctx.lineWidth = 6.5;
+  ctx.lineCap = 'round';
   for(const side of [-1,1]){
-    const jitter = (Math.random()-0.5)*3;
-    const swing = Math.sin(performance.now()/110 + side*2)*9 + jitter;
-    ctx.beginPath(); ctx.moveTo(side*r*0.55, 4);
-    ctx.lineTo(side*(r+15), 15+swing);
-    ctx.lineTo(side*(r+24), 5+swing);
-    ctx.lineTo(side*(r+29), 12+swing);
+    const jitter = (Math.random()-0.5)*2.5;
+    const swing = Math.sin(t/260 + side*2)*5 + jitter;
+    ctx.beginPath();
+    ctx.moveTo(side*10, -3);
+    ctx.lineTo(side*16, 15+swing);
+    ctx.lineTo(side*14, 27+swing);
     ctx.stroke();
+    ctx.fillStyle = `rgb(${200+proximity*15|0},${182+proximity*12|0},${168+proximity*10|0})`;
+    ctx.beginPath(); ctx.arc(side*14,28+swing,2.6,0,Math.PI*2); ctx.fill();
   }
 
-  // gaunt, jagged elongated silhouette
-  ctx.fillStyle = `rgb(${18+proximity*26|0},${6+proximity*7|0},${10+proximity*9|0})`;
-  ctx.beginPath(); ctx.moveTo(0,-r-11);
-  for(let i=0;i<14;i++){
-    const ang = (i/14)*Math.PI*2;
-    const jag = Math.sin(ang*6+performance.now()/140)*2.5;
-    const widen = (ang>Math.PI*0.35 && ang<Math.PI*1.65) ? 5 : 0;
-    const rad = r + jag + widen;
-    ctx.lineTo(Math.cos(ang)*rad, Math.sin(ang)*rad*1.18);
+  // stained lab coat, human torso
+  const coat = 222;
+  ctx.fillStyle = `rgb(${coat},${coat-8},${coat-18})`;
+  ctx.beginPath();
+  ctx.moveTo(-12,-7); ctx.lineTo(12,-7); ctx.lineTo(15,29); ctx.lineTo(-15,29);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(40,34,28,0.55)'; ctx.lineWidth=1.1;
+  ctx.beginPath(); ctx.moveTo(-3,-7); ctx.lineTo(0,3); ctx.lineTo(3,-7); ctx.stroke();
+
+  // old blood stains on the coat, more visible the closer she gets
+  if(proximity>0.12){
+    ctx.globalAlpha = Math.min(1,(proximity-0.1)/0.5)*bodyAlpha;
+    ctx.fillStyle = '#6a0a0a';
+    ctx.beginPath(); ctx.ellipse(-4,9,4.5,6.5,0.3,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(6,17,3.5,5.5,-0.25,0,Math.PI*2); ctx.fill();
+    ctx.globalAlpha = bodyAlpha;
+  }
+
+  // neck + pale head
+  const skin = 190+proximity*22;
+  ctx.fillStyle = `rgb(${skin|0},${skin-18|0},${skin-30|0})`;
+  ctx.fillRect(-3,-11,6,6);
+  ctx.beginPath(); ctx.arc(0,-17,9,0,Math.PI*2); ctx.fill();
+
+  // wild, disheveled hair
+  ctx.fillStyle = '#17120f';
+  ctx.beginPath();
+  for(let i=0;i<=8;i++){
+    const ang = Math.PI + (i/8)*Math.PI;
+    const jag = Math.sin(ang*9 + t/190)*3;
+    const rad = 9.5+jag;
+    const x = Math.cos(ang)*rad, y = -17+Math.sin(ang)*rad*0.95;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
   }
   ctx.closePath(); ctx.fill();
-  ctx.strokeStyle = `rgba(100,10,10,${bodyAlpha*0.85})`; ctx.lineWidth=1.5; ctx.stroke();
 
-  // gaping jagged mouth — only resolves into view up close
-  if(proximity>0.28){
-    ctx.globalAlpha = Math.min(1,(proximity-0.28)/0.5);
-    ctx.fillStyle = '#050000';
-    ctx.beginPath(); ctx.ellipse(0,7,6.5,10,0,0,Math.PI*2); ctx.fill();
-    ctx.strokeStyle='#eee'; ctx.lineWidth=1.3;
-    ctx.beginPath();
-    ctx.moveTo(-6.5,1); ctx.lineTo(-3.5,9); ctx.lineTo(-0.8,1);
-    ctx.lineTo(0.8,9); ctx.lineTo(3.5,1); ctx.lineTo(6.5,9);
-    ctx.stroke();
+  // manic mouth — resolves into view up close
+  if(proximity>0.26){
+    ctx.globalAlpha = Math.min(1,(proximity-0.26)/0.5);
+    ctx.strokeStyle = '#2a0a0a'; ctx.lineWidth=1.4;
+    ctx.beginPath(); ctx.moveTo(-5,-12.5); ctx.quadraticCurveTo(0,-9,5,-12.5); ctx.stroke();
   }
 
   // eyes — pierce the dark at ANY distance, this is how you first see her coming
   ctx.globalAlpha = 1;
-  const pulse = 0.82+0.18*Math.sin(performance.now()/170);
-  ctx.shadowColor = '#ff1414'; ctx.shadowBlur = 15+proximity*16;
+  const pulse = 0.82+0.18*Math.sin(t/170);
+  ctx.shadowColor = '#ff1414'; ctx.shadowBlur = 14+proximity*15;
   ctx.fillStyle = `rgba(255,${(18+34*(1-proximity))|0},20,${pulse})`;
-  const eyeR = 2.8 + proximity*2.4;
-  ctx.beginPath(); ctx.arc(-6.5,-4,eyeR,0,Math.PI*2); ctx.arc(6.5,-4,eyeR,0,Math.PI*2); ctx.fill();
+  const eyeR = 1.9 + proximity*1.7;
+  ctx.beginPath(); ctx.arc(-3.4,-17.5,eyeR,0,Math.PI*2); ctx.arc(3.4,-17.5,eyeR,0,Math.PI*2); ctx.fill();
 }
 
 function renderSprites(){
