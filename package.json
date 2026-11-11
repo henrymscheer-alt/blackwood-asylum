@@ -1,0 +1,9 @@
+{
+  "name": "blackwood-asylum",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Blackwood Asylum horror game — Netlify Functions dependencies for the leaderboard",
+  "dependencies": {
+    "@netlify/blobs": "*"
+  }
+}
