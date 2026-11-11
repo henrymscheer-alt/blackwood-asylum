@@ -1,0 +1,2753 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BLACKWOOD ASYLUM</title>
+<style>
+  :root{
+    --blood:#8a1414;
+    --bloodbright:#c5281e;
+    --bone:#cfc6b8;
+    --panel:#0c0a0a;
+  }
+  html,body{
+    margin:0; padding:0; width:100%; height:100%;
+    background:#000; color:var(--bone);
+    font-family:'Courier New', monospace;
+    overflow:hidden;
+    user-select:none;
+  }
+  *{ box-sizing:border-box; }
+  #wrap{
+    position:fixed; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    background:#000;
+  }
+  #stage{
+    position:relative;
+    width:960px; height:640px;
+    max-width:100vw; max-height:100vh;
+    box-shadow:0 0 120px 20px rgba(0,0,0,0.9) inset, 0 0 40px rgba(138,20,20,0.15);
+    background:#000;
+  }
+  #stage.shake{ animation:shakeAnim 0.5s ease; }
+  @keyframes shakeAnim{
+    0%{ transform:translate(0,0) rotate(0); }
+    10%{ transform:translate(-14px,8px) rotate(-1deg); }
+    20%{ transform:translate(12px,-10px) rotate(1deg); }
+    30%{ transform:translate(-10px,10px) rotate(-1deg); }
+    40%{ transform:translate(14px,6px) rotate(1deg); }
+    50%{ transform:translate(-8px,-8px) rotate(-0.5deg); }
+    60%{ transform:translate(10px,8px) rotate(0.5deg); }
+    70%{ transform:translate(-6px,-6px) rotate(0); }
+    80%{ transform:translate(6px,4px) rotate(0); }
+    100%{ transform:translate(0,0) rotate(0); }
+  }
+  canvas{ position:absolute; top:0; left:0; image-rendering:pixelated; }
+
+  .fullscreen-ui{
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    flex-direction:column;
+    background:radial-gradient(ellipse at center, #140606 0%, #000000 80%);
+    text-align:center;
+    z-index:20;
+  }
+  .hidden{ display:none !important; }
+
+  .fullscreen-ui h1{
+    width:100%;
+    box-sizing:border-box;
+    padding:0 16px;
+    text-align:center;
+    white-space:normal;
+    margin:0 0 4px 0;
+  }
+  h1.title{
+    font-family:'Georgia','Times New Roman',serif;
+    font-size:clamp(26px,5.2vw,52px);
+    letter-spacing:6px;
+    color:var(--blood);
+    text-shadow:0 0 20px rgba(197,40,30,0.8), 0 0 60px rgba(197,40,30,0.4);
+    filter:blur(0.2px);
+  }
+  .subtitle{
+    font-family:'Georgia',serif;
+    letter-spacing:4px;
+    color:#766;
+    font-size:15px;
+    margin-bottom:40px;
+    text-transform:uppercase;
+  }
+  button.spooky{
+    background:#1a0d0d;
+    border:1px solid var(--blood);
+    color:var(--bone);
+    font-family:'Georgia',serif;
+    letter-spacing:3px;
+    text-transform:uppercase;
+    font-size:16px;
+    padding:14px 36px;
+    cursor:pointer;
+    transition:all .15s;
+    margin:8px;
+  }
+  button.spooky:hover{
+    background:var(--blood);
+    color:#fff;
+    box-shadow:0 0 20px rgba(197,40,30,0.6);
+  }
+  .flicker{ animation:flick 4s infinite; }
+  @keyframes flick{
+    0%,100%{opacity:1;} 92%{opacity:1;} 93%{opacity:0.4;} 94%{opacity:1;} 95%{opacity:0.6;} 96%{opacity:1;}
+  }
+
+  #charGrid{
+    display:flex; gap:18px; flex-wrap:wrap; justify-content:center; max-width:880px;
+  }
+  .charCard{
+    width:190px; min-height:250px;
+    background:#0e0808;
+    border:1px solid #3a1414;
+    padding:16px;
+    cursor:pointer;
+    transition:all .15s;
+    text-align:left;
+    display:flex; flex-direction:column;
+  }
+  .charCard:hover{ border-color:var(--bloodbright); background:#1a0b0b; box-shadow:0 0 18px rgba(197,40,30,0.35); transform:translateY(-3px); }
+  .charCard h3{ font-family:Georgia,serif; color:var(--bloodbright); margin:0 0 6px 0; font-size:18px; letter-spacing:1px; }
+  .charCard .role{ color:#998; font-size:11px; text-transform:uppercase; letter-spacing:2px; margin-bottom:10px;}
+  .charCard p{ font-size:12px; line-height:1.5; color:#bba; margin:0 0 10px 0; flex:1; }
+  .charCard .ability{ font-size:11px; color:var(--bone); border-top:1px solid #3a1414; padding-top:8px; }
+  .charCard .ability b{ color:var(--bloodbright); }
+
+  #hud{
+    position:absolute; top:0; left:0; width:100%;
+    display:flex; justify-content:space-between; align-items:flex-start;
+    padding:10px 14px;
+    z-index:5;
+    pointer-events:none;
+    font-size:13px;
+    text-shadow:0 0 4px #000, 0 0 8px #000;
+  }
+  #hud .block{ display:flex; flex-direction:column; gap:4px; background:rgba(0,0,0,0.35); padding:6px 10px; border:1px solid rgba(138,20,20,0.4);}
+  #hearts span{ color:var(--bloodbright); font-size:16px; letter-spacing:2px;}
+  .bar{ width:130px; height:8px; background:#200; border:1px solid #500; }
+  .bar > div{ height:100%; background:var(--bloodbright); width:100%; transition:width .2s; }
+  #batteryBar > div{ background:#d9c15a; }
+  #staminaBar > div{ background:#6fae5c; }
+  #keysLine, #abilityLine{ color:var(--bone); font-size:12px; }
+  #promptLine{ color:#a99; font-size:11px; }
+
+  #roomPopup{
+    position:absolute; top:46%; left:50%; transform:translate(-50%,-50%);
+    font-family:Georgia,serif; letter-spacing:4px; text-transform:uppercase;
+    font-size:22px; color:var(--bone); opacity:0; pointer-events:none;
+    text-shadow:0 0 10px #000,0 0 20px #000;
+    transition:opacity 1.2s ease;
+    z-index:4;
+  }
+  #roomPopup.show{ opacity:0.9; transition:opacity .2s ease; }
+
+  #hint{
+    position:absolute; bottom:40px; left:50%; transform:translate(-50%,0);
+    font-size:13px; color:#e8d; background:rgba(0,0,0,0.6); padding:8px 16px;
+    border:1px solid var(--blood); opacity:0; transition:opacity .3s;
+    z-index:4; text-align:center; max-width:70%;
+  }
+  #hint.show{ opacity:1; }
+
+  #journal{
+    position:absolute; inset:40px; background:rgba(8,5,5,0.97); border:1px solid var(--blood);
+    z-index:15; padding:28px; overflow-y:auto;
+    font-size:13px; line-height:1.7;
+  }
+  #journal h2{ font-family:Georgia,serif; color:var(--bloodbright); letter-spacing:3px; border-bottom:1px solid #3a1414; padding-bottom:10px;}
+  #journal .entry{ margin-bottom:18px; padding:10px; border-left:2px solid var(--blood); background:rgba(138,20,20,0.06); }
+  #journal .entry.locked{ color:#555; font-style:italic; border-left-color:#333; }
+  #journal .closeNote{ text-align:center; margin-top:20px; color:#876; font-size:12px; }
+
+  #pauseScreen, #gameoverScreen, #winScreen{ z-index:20; }
+  #gameoverScreen h1, #winScreen h1{ font-size:clamp(22px,4.5vw,40px); }
+  #winScreen h1{ color:#c9a84c; text-shadow:0 0 20px rgba(201,168,76,0.6);}
+  .epilogue{ max-width:600px; font-size:15px; line-height:1.9; color:#ccc0a8; font-family:Georgia,serif; font-style:italic; margin-bottom:30px; padding:0 20px;}
+
+  #scarePrelude{
+    position:absolute; inset:0; z-index:49; background:#000; opacity:0; pointer-events:none;
+  }
+  #scarePrelude.active{ animation: preludeDip var(--predur,0.3s) ease-in; }
+  @keyframes preludeDip{
+    0%{ opacity:0; } 60%{ opacity:0.96; } 100%{ opacity:1; }
+  }
+  #jumpscare{
+    position:absolute; inset:0; z-index:50; display:flex; align-items:center; justify-content:center;
+    background:#000; opacity:0; pointer-events:none; overflow:hidden;
+  }
+  #jumpscare .flashbulb{
+    position:absolute; inset:0; background:#fff; z-index:2;
+    animation: bulbPop 0.22s ease-out both;
+  }
+  @keyframes bulbPop{ 0%{opacity:1;} 100%{opacity:0;} }
+  #jumpscare.active{ opacity:1; animation:jsflash var(--jsdur,0.6s) steps(2,end); }
+  @keyframes jsflash{
+    0%{ opacity:0; }
+    6%{ opacity:1; background:#fff; }
+    10%{ opacity:1; background:#300; }
+    22%{ opacity:1; background:#000;}
+    38%{ opacity:1; background:#600;}
+    55%{ opacity:1; background:#000;}
+    100%{ opacity:0; }
+  }
+  #jumpscare .jsFace{
+    position:relative; width:72%; height:72%;
+    filter:drop-shadow(0 0 55px #c00) contrast(1.3) saturate(1.4);
+    animation: facePop var(--jsdur,0.6s) cubic-bezier(.17,1.8,.3,1) both;
+  }
+  @keyframes facePop{
+    0%{ transform:scale(0.15) rotate(-8deg); opacity:0; filter:brightness(4) hue-rotate(0deg) contrast(1.6);}
+    12%{ transform:scale(1.6) rotate(6deg); opacity:1; filter:brightness(2.3) hue-rotate(60deg);}
+    28%{ transform:scale(0.82) rotate(-3deg); filter:brightness(0.85) hue-rotate(-30deg);}
+    42%{ transform:scale(1.2) rotate(2deg); filter:brightness(1.5) hue-rotate(20deg);}
+    58%{ transform:scale(0.96) rotate(-1deg); filter:brightness(1) hue-rotate(0deg);}
+    100%{ transform:scale(1) rotate(0); opacity:1; filter:brightness(1);}
+  }
+  #jumpscare .scan{
+    position:absolute; inset:0; pointer-events:none; mix-blend-mode:overlay;
+    background:repeating-linear-gradient(to bottom, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 1px, transparent 2px, transparent 4px);
+  }
+  #jumpscare .slice{
+    position:absolute; left:0; width:100%; background:#000; mix-blend-mode:difference;
+    animation: sliceJit 0.11s steps(2,end) infinite;
+  }
+  @keyframes sliceJit{ 0%{ transform:translateX(0);} 50%{ transform:translateX(var(--sx,8px)); } 100%{ transform:translateX(0);} }
+  .shakeBig{ animation:shakeAnimBig 0.75s ease !important; }
+  @keyframes shakeAnimBig{
+    0%{transform:translate(0,0) rotate(0);} 8%{transform:translate(-26px,15px) rotate(-2.4deg);}
+    16%{transform:translate(24px,-18px) rotate(2.2deg);} 24%{transform:translate(-22px,20px) rotate(-2deg);}
+    32%{transform:translate(26px,11px) rotate(2deg);} 40%{transform:translate(-18px,-16px) rotate(-1.2deg);}
+    50%{transform:translate(20px,15px) rotate(1.2deg);} 60%{transform:translate(-16px,-11px) rotate(-1deg);}
+    70%{transform:translate(13px,9px) rotate(1deg);} 80%{transform:translate(-9px,-7px) rotate(0);}
+    90%{transform:translate(7px,5px) rotate(0);} 100%{transform:translate(0,0) rotate(0);}
+  }
+
+  #vignette{
+    position:absolute; inset:0; pointer-events:none; z-index:3;
+    box-shadow: inset 0 0 160px 60px rgba(0,0,0,0.85);
+  }
+  #fearPulse{
+    position:absolute; inset:0; pointer-events:none; z-index:2;
+    background:radial-gradient(circle, rgba(138,20,20,0) 55%, rgba(138,20,20,0.35) 100%);
+    opacity:0; transition:opacity .4s;
+  }
+  #fearPulse.on{ animation:pulseFear 1.1s infinite; }
+  @keyframes pulseFear{ 0%,100%{opacity:0.15;} 50%{opacity:0.5;} }
+
+  #muteBtn{
+    position:absolute; bottom:10px; left:10px; z-index:30;
+    width:34px; height:34px; border:1px solid rgba(138,20,20,0.5);
+    background:rgba(0,0,0,0.45); color:var(--bone); font-size:16px;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+    transition:all .15s;
+  }
+  #muteBtn:hover{ border-color:var(--bloodbright); background:rgba(138,20,20,0.25); }
+
+  footer#tip{
+    position:absolute; bottom:4px; width:100%; text-align:center; color:#544; font-size:10px; z-index:6; pointer-events:none;
+  }
+
+  #hideOverlay{
+    position:absolute; inset:0; z-index:4; pointer-events:none;
+    background:#000; opacity:0; transition:opacity .25s;
+  }
+  #hideOverlay.on{ opacity:1; }
+  #hideOverlay .slit{
+    position:absolute; top:0; bottom:0; left:50%; width:14%; transform:translateX(-50%);
+    background:radial-gradient(ellipse at center, rgba(50,38,30,0.95) 0%, rgba(0,0,0,1) 72%);
+  }
+  #hideOverlay .label{
+    position:absolute; bottom:70px; left:50%; transform:translateX(-50%);
+    color:#c99; font-size:12px; letter-spacing:2px; text-transform:uppercase; text-shadow:0 0 6px #000;
+    white-space:nowrap;
+  }
+  #nightmareToggle{
+    margin-top:14px; font-size:12px; color:#b99; letter-spacing:1px; cursor:pointer; user-select:none;
+  }
+  #nightmareToggle input{ accent-color:#8a1414; margin-right:8px; vertical-align:middle; }
+
+  #crosshair{
+    position:absolute; top:50%; left:50%; width:6px; height:6px; margin:-3px 0 0 -3px;
+    border-radius:50%; background:rgba(255,255,255,0.55); z-index:7; pointer-events:none;
+    box-shadow:0 0 4px rgba(0,0,0,0.8);
+  }
+  #clickToLook{
+    position:absolute; inset:0; z-index:40; cursor:pointer; background:transparent;
+  }
+
+  #screen-settings{ overflow-y:auto; padding:30px 10px; }
+  .settingsPanel{
+    width:100%; max-width:560px; text-align:left; background:#0e0808; border:1px solid #3a1414;
+    padding:18px 22px; margin-bottom:16px;
+  }
+  .settingsPanel h3{ font-family:Georgia,serif; color:var(--bloodbright); letter-spacing:2px; margin:0 0 10px 0; font-size:15px; text-transform:uppercase; }
+  .settingsPanel .note{ color:#876; font-size:11px; line-height:1.5; margin-bottom:10px; }
+  .settingsRow{ display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap; align-items:center; }
+  .settingsRow input[type=text], .settingsRow input[type=password]{
+    background:#140d0d; border:1px solid #4a2020; color:var(--bone); padding:8px 10px;
+    font-family:'Courier New',monospace; font-size:13px; flex:1; min-width:120px;
+  }
+  .settingsRow button{
+    background:#1a0d0d; border:1px solid var(--blood); color:var(--bone);
+    font-family:Georgia,serif; letter-spacing:1px; text-transform:uppercase; font-size:12px;
+    padding:8px 14px; cursor:pointer;
+  }
+  .settingsRow button:hover{ background:var(--blood); color:#fff; }
+  .settingsMsg{ font-size:12px; min-height:16px; }
+  .settingsMsg.err{ color:#e05a4a; }
+  .settingsMsg.ok{ color:#7ab87a; }
+  #profileStatus{ color:var(--bone); font-size:13px; margin-bottom:10px; }
+  #skinGrid{ display:flex; gap:14px; flex-wrap:wrap; }
+  .skinSwatch{
+    width:76px; text-align:center; cursor:pointer; padding:8px 4px; border:1px solid #333;
+    opacity:0.5;
+  }
+  .skinSwatch.unlocked{ opacity:1; }
+  .skinSwatch.selected{ border-color:var(--bloodbright); box-shadow:0 0 10px rgba(197,40,30,0.5); }
+  .skinSwatch .dot{ width:30px; height:30px; border-radius:50%; margin:0 auto 6px auto; border:1px solid #000; }
+  .skinSwatch .name{ font-size:10px; color:#bba; letter-spacing:0.5px; }
+  .skinSwatch .lockNote{ font-size:9px; color:#765; margin-top:3px; }
+  #devMenu{ display:flex; flex-direction:column; gap:8px; margin-top:10px; }
+  #devMenu .devSection{
+    color:var(--bloodbright); font-size:11px; letter-spacing:2px; text-transform:uppercase;
+    margin:10px 0 2px 0; border-top:1px solid #3a1414; padding-top:10px;
+  }
+  #devMenu .devSection:first-child{ border-top:none; margin-top:0; padding-top:0; }
+  #devMenu .settingsRow button[data-speed], #devMenu .settingsRow button[data-scare]{
+    font-size:11px; padding:6px 10px;
+  }
+  #devMenu label{ font-size:12px; color:#b99; cursor:pointer; }
+  #devMenu input[type=checkbox]{ accent-color:#8a1414; margin-right:8px; vertical-align:middle; }
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage">
+  <canvas id="game" width="960" height="640"></canvas>
+
+  <div id="vignette"></div>
+  <div id="fearPulse"></div>
+  <div id="roomPopup"></div>
+  <div id="hint"></div>
+  <div id="hideOverlay"><div class="slit"></div><div class="label">HIDING — press E to come out</div></div>
+  <div id="crosshair" class="hidden"></div>
+  <div id="clickToLook" class="hidden"></div>
+
+  <div id="hud" class="hidden">
+    <div class="block">
+      <div id="hearts"></div>
+      <div>BATTERY <div class="bar" id="batteryBar"><div></div></div></div>
+      <div>STAMINA <div class="bar" id="staminaBar"><div></div></div></div>
+    </div>
+    <div class="block" style="text-align:right;">
+      <div id="keysLine">KEYS: 0 / 3</div>
+      <div id="stunLine" class="hidden"></div>
+      <div id="abilityLine"></div>
+      <div id="promptLine">[F] Flashlight  [M] Map  [J] Journal  [Esc] Pause</div>
+    </div>
+  </div>
+
+  <!-- MENU -->
+  <div id="screen-menu" class="fullscreen-ui">
+    <h1 class="title flicker">BLACKWOOD ASYLUM</h1>
+    <div class="subtitle">it never really closed</div>
+    <div id="bestTimeLine" style="color:#876; font-size:12px; letter-spacing:1px; margin:-28px 0 4px 0;"></div>
+    <div id="continueLine" style="color:#b99; font-size:12px; letter-spacing:1px; margin:0 0 20px 0;"></div>
+    <button class="spooky hidden" id="btnContinue">Continue</button>
+    <button class="spooky" id="btnBegin">Enter, If You Dare</button>
+    <button class="spooky" id="btnSettingsFromMenu" style="font-size:12px; padding:10px 24px;">Settings</button>
+    <div style="margin-top:48px; color:var(--bloodbright); font-size:15px; letter-spacing:1px; opacity:0.85;">Created by Henry Scheer and Oliver Clark</div>
+  </div>
+
+  <!-- CHARACTER SELECT -->
+  <div id="screen-select" class="fullscreen-ui hidden">
+    <h1 class="title" style="font-size:30px;letter-spacing:5px;">WHO GOES IN</h1>
+    <div class="subtitle" style="margin-bottom:24px;">choose who returns to blackwood</div>
+    <div id="charGrid"></div>
+    <label id="nightmareToggle"><input type="checkbox" id="chkNightmare"> Nightmare Mode — faster, sharper-eyed, less battery to start</label>
+  </div>
+
+  <!-- SETTINGS -->
+  <div id="screen-settings" class="fullscreen-ui hidden">
+    <h1 class="title" style="font-size:28px;letter-spacing:5px;">SETTINGS</h1>
+
+    <div class="settingsPanel">
+      <h3>Local Profile</h3>
+      <div class="note">Stored only in this browser, on this device. This is not a real account — no password recovery, nothing is sent anywhere. Use a PIN, not a real password.</div>
+      <div id="profileStatus"></div>
+      <div id="profileLoggedOut">
+        <div class="settingsRow">
+          <input type="text" id="suUsername" placeholder="username" maxlength="16">
+          <input type="password" id="suPin" placeholder="PIN (4+ chars)" maxlength="24">
+          <button id="btnSignUp">Sign Up</button>
+          <button id="btnLogIn">Log In</button>
+        </div>
+        <div class="settingsMsg" id="profileMsg"></div>
+      </div>
+      <div id="profileLoggedIn" class="hidden">
+        <div class="settingsRow"><button id="btnLogOut">Log Out</button></div>
+      </div>
+    </div>
+
+    <div class="settingsPanel">
+      <h3>Skins</h3>
+      <div class="note">Change your flashlight glow and map marker color. Unlock more by playing.</div>
+      <div id="skinGrid"></div>
+    </div>
+
+    <div class="settingsPanel">
+      <h3>Developer Mode</h3>
+      <div id="devLocked">
+        <div class="settingsRow">
+          <input type="text" id="devCodeInput" placeholder="Enter code...">
+          <button id="btnDevUnlock">Unlock</button>
+        </div>
+        <div class="settingsMsg" id="devMsg"></div>
+      </div>
+      <div id="devUnlocked" class="hidden">
+        <div class="settingsMsg ok">Developer Mode unlocked.</div>
+        <div id="devMenu">
+          <div class="devSection">Player</div>
+          <label><input type="checkbox" id="chkGod"> God Mode (no damage)</label>
+          <label><input type="checkbox" id="chkInfiniteBattery"> Infinite Battery &amp; Stamina</label>
+          <label><input type="checkbox" id="chkNoclip"> Noclip (walk through walls)</label>
+          <label><input type="checkbox" id="chkSuperSpeed"> Super Speed</label>
+          <div class="settingsRow">
+            <button id="btnCheatHeal">Full Heal</button>
+            <button id="btnCheatRefill">Refill Battery &amp; Stamina</button>
+            <button id="btnCheatKill">Instant Lose</button>
+          </div>
+
+          <div class="devSection">The Matron</div>
+          <label><input type="checkbox" id="chkFreezeMonster"> Freeze the Matron</label>
+          <label><input type="checkbox" id="chkXray"> X-Ray Vision (see her through walls)</label>
+          <div class="settingsRow">
+            <span style="color:#998;font-size:11px;">Her speed:</span>
+            <button data-speed="0.4">Slower</button>
+            <button data-speed="1">Normal</button>
+            <button data-speed="2.2">Faster</button>
+            <button data-speed="5">Insane</button>
+          </div>
+          <div class="settingsRow">
+            <button id="btnCheatMonsterHere">Summon Her To Me</button>
+            <button id="btnCheatMonsterAway">Banish Her Away</button>
+          </div>
+
+          <div class="devSection">World &amp; Progress</div>
+          <label><input type="checkbox" id="chkRevealMap"> Reveal Full Map</label>
+          <label><input type="checkbox" id="chkForceHunted"> Force Hunted Mode</label>
+          <div class="settingsRow">
+            <button id="btnCheatAllKeys">Unlock All Keys</button>
+            <button id="btnCheatTeleportExit">Teleport to Exit</button>
+            <button id="btnCheatResetScares">Reset Scripted Scares</button>
+            <button id="btnCheatWin">Instant Win</button>
+          </div>
+
+          <div class="devSection">Weapons — defeat the Matron (dev only)</div>
+          <div class="note" style="margin-bottom:6px;">Left-click (mouse-look on) or hold R to attack/fire. Only works here — never available in normal play.</div>
+          <div class="settingsRow" id="weaponGrid"></div>
+
+          <div class="devSection">Jumpscare Testing</div>
+          <div class="settingsRow">
+            <button data-scare="ambient">Ambient</button>
+            <button data-scare="scripted">Scripted</button>
+            <button data-scare="catch">Catch</button>
+            <button data-scare="final">Final</button>
+          </div>
+
+          <div class="devSection">Misc</div>
+          <label><input type="checkbox" id="chkDebugInfo"> Show Debug Info</label>
+          <div class="settingsRow">
+            <button id="btnDevDisable" style="border-color:#e05a4a;">Turn Off Dev Tools</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button class="spooky" id="btnSettingsBack">Back</button>
+  </div>
+
+  <!-- JOURNAL -->
+  <div id="journal" class="hidden"></div>
+
+  <!-- PAUSE -->
+  <div id="pauseScreen" class="fullscreen-ui hidden">
+    <h1 class="title" style="font-size:40px;">PAUSED</h1>
+    <button class="spooky" id="btnResume">Resume</button>
+    <button class="spooky" id="btnRestartFromPause">Restart</button>
+    <button class="spooky" id="btnSettingsFromPause">Settings</button>
+    <button class="spooky" id="btnQuitToMenu">Quit to Menu</button>
+  </div>
+
+  <!-- GAME OVER -->
+  <div id="gameoverScreen" class="fullscreen-ui hidden">
+    <h1 class="title">YOU DIDN'T MAKE IT</h1>
+    <p class="epilogue" id="gameoverText"></p>
+    <button class="spooky" id="btnRetry">Try Again</button>
+    <button class="spooky" id="btnGoMenuFromOver">Quit to Menu</button>
+  </div>
+
+  <!-- WIN -->
+  <div id="winScreen" class="fullscreen-ui hidden">
+    <h1 class="title">YOU ESCAPED</h1>
+    <p class="epilogue" id="winText"></p>
+    <div id="winStats" style="color:#998; font-size:12px; letter-spacing:1px; margin:-16px 0 24px 0; white-space:pre-line;"></div>
+    <button class="spooky" id="btnPlayAgain">Play Again</button>
+  </div>
+
+  <div id="scarePrelude"></div>
+  <button id="muteBtn" title="Mute/unmute">🔊</button>
+  <div id="jumpscare"></div>
+  <footer id="tip">Mouse look · WASD move/strafe · Arrows move/turn · Shift sprint · F flashlight · E hide · M map · J journal · Q ability</footer>
+</div></div>
+
+<script>
+(function(){
+"use strict";
+
+/* =========================================================
+   AUDIO ENGINE — fully procedural, no external files
+========================================================= */
+const Audio_ = (function(){
+  let ctx = null;
+  let masterGain = null;
+  function loadMuted(){ try{ return localStorage.getItem('blackwood_muted')==='1'; }catch(e){ return false; } }
+  function ensure(){ if(!ctx) ctx = new (window.AudioContext||window.webkitAudioContext)(); return ctx; }
+  function master(){
+    const ac = ensure();
+    if(!masterGain){
+      masterGain = ac.createGain();
+      masterGain.gain.value = loadMuted() ? 0 : 1;
+      masterGain.connect(ac.destination);
+    }
+    return masterGain;
+  }
+  function setMuted(muted){
+    master().gain.value = muted ? 0 : 1;
+    try{ localStorage.setItem('blackwood_muted', muted ? '1' : '0'); }catch(e){}
+  }
+  function isMuted(){ return masterGain ? masterGain.gain.value===0 : loadMuted(); }
+
+  function tone(freq,dur,type,vol,delay,sweepTo){
+    const ac = ensure();
+    const t0 = ac.currentTime + (delay||0);
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = type||'sine';
+    osc.frequency.setValueAtTime(freq,t0);
+    if(sweepTo) osc.frequency.exponentialRampToValueAtTime(Math.max(1,sweepTo), t0+dur);
+    gain.gain.setValueAtTime(0,t0);
+    gain.gain.linearRampToValueAtTime(vol, t0+0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+    osc.connect(gain); gain.connect(master());
+    osc.start(t0); osc.stop(t0+dur+0.05);
+  }
+
+  function noiseBurst(dur,vol,filterFreq,delay){
+    const ac = ensure();
+    const t0 = ac.currentTime + (delay||0);
+    const bufferSize = Math.max(1,Math.floor(ac.sampleRate*dur));
+    const buffer = ac.createBuffer(1,bufferSize,ac.sampleRate);
+    const data = buffer.getChannelData(0);
+    for(let i=0;i<bufferSize;i++) data[i] = (Math.random()*2-1) * (1 - i/bufferSize);
+    const src = ac.createBufferSource(); src.buffer = buffer;
+    const filt = ac.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value = filterFreq||3000;
+    const gain = ac.createGain();
+    gain.gain.setValueAtTime(vol,t0);
+    gain.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+    src.connect(filt); filt.connect(gain); gain.connect(master());
+    src.start(t0);
+  }
+
+  function makeDistortion(amount){
+    const ac = ensure();
+    const ws = ac.createWaveShaper();
+    const n = 4096, curve = new Float32Array(n);
+    const k = amount||50;
+    for(let i=0;i<n;i++){
+      const x = (i*2)/n - 1;
+      curve[i] = (3+k)*x*20*(Math.PI/180) / (Math.PI + k*Math.abs(x));
+    }
+    ws.curve = curve; ws.oversample='4x';
+    return ws;
+  }
+  function screamSweep(delay, vol, dur, distortAmt){
+    const ac = ensure();
+    const t0 = ac.currentTime + (delay||0);
+    const pitchJ = 0.88 + Math.random()*0.28;
+    const oscs = [];
+    [0,14,-19].forEach((detune,i)=>{
+      const osc = ac.createOscillator(); osc.type = i===2?'square':'sawtooth'; osc.detune.value = detune;
+      const startF = (1050+i*90)*pitchJ, endF = (85+i*6)*pitchJ;
+      osc.frequency.setValueAtTime(startF,t0);
+      osc.frequency.exponentialRampToValueAtTime(endF,t0+dur);
+      oscs.push(osc);
+    });
+    const dist = makeDistortion(distortAmt||40);
+    const gain = ac.createGain();
+    gain.gain.setValueAtTime(0,t0);
+    gain.gain.linearRampToValueAtTime(vol,t0+0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+    oscs.forEach(o=>{ o.connect(dist); o.start(t0); o.stop(t0+dur+0.05); });
+    dist.connect(gain); gain.connect(master());
+  }
+  function rumbleBuild(delay, dur){
+    const ac = ensure();
+    const t0 = ac.currentTime + (delay||0);
+    const osc = ac.createOscillator(); osc.type='sine';
+    osc.frequency.setValueAtTime(28,t0);
+    osc.frequency.linearRampToValueAtTime(38,t0+dur);
+    const gain = ac.createGain();
+    gain.gain.setValueAtTime(0.0001,t0);
+    gain.gain.exponentialRampToValueAtTime(0.5,t0+dur*0.9);
+    gain.gain.linearRampToValueAtTime(0.0001,t0+dur+0.05);
+    osc.connect(gain); gain.connect(master());
+    osc.start(t0); osc.stop(t0+dur+0.1);
+  }
+  function preScareWhisper(delay){
+    const ac = ensure();
+    const t0 = ac.currentTime + (delay||0);
+    const bufferSize = Math.floor(ac.sampleRate*0.4);
+    const buffer = ac.createBuffer(1,bufferSize,ac.sampleRate);
+    const data = buffer.getChannelData(0);
+    for(let i=0;i<bufferSize;i++) data[i] = (Math.random()*2-1)*0.5;
+    const src = ac.createBufferSource(); src.buffer = buffer;
+    const bp = ac.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=700; bp.Q.value=0.6;
+    const gain = ac.createGain();
+    gain.gain.setValueAtTime(0,t0);
+    gain.gain.linearRampToValueAtTime(0.1,t0+0.15);
+    gain.gain.linearRampToValueAtTime(0,t0+0.4);
+    src.connect(bp); bp.connect(gain); gain.connect(master());
+    src.start(t0);
+    tone(220,0.35,'sine',0.04,delay||0,180);
+  }
+  function preScareCue(tier){
+    preScareWhisper(0);
+    rumbleBuild(0, tier==='final' ? 0.46 : (tier==='catch' ? 0.34 : 0.24));
+  }
+  function jumpscareSting(tier){
+    tier = tier || 'scripted';
+    if(tier==='ambient'){
+      noiseBurst(0.3, 0.55, 3800, 0);
+      tone(220,0.3,'sawtooth',0.35,0,60);
+      return;
+    }
+    noiseBurst(0.6, 1.0, 5500, 0);
+    screamSweep(0, tier==='catch'||tier==='final' ? 0.75 : 0.58, tier==='final'?0.95:0.58, tier==='final'?75:48);
+    tone(55,tier==='final'?0.9:0.65,'square',0.58,0.02,16);
+    if(tier==='catch'||tier==='final'){
+      tone(32,0.85,'sine',0.42,0.08,10);
+      noiseBurst(0.32,0.5,8200,0.38);
+    }
+    if(tier==='final'){
+      screamSweep(0.42, 0.62, 0.6, 62);
+    }
+  }
+  function distantBang(){
+    noiseBurst(0.18, 0.35, 700, 0);
+    tone(90,0.4,'sine',0.25,0,40);
+  }
+  function distantWhisper(){
+    const ac = ensure();
+    const t0 = ac.currentTime;
+    const bufferSize = Math.floor(ac.sampleRate*0.9);
+    const buffer = ac.createBuffer(1,bufferSize,ac.sampleRate);
+    const data = buffer.getChannelData(0);
+    for(let i=0;i<bufferSize;i++) data[i] = (Math.random()*2-1);
+    const src = ac.createBufferSource(); src.buffer = buffer;
+    const bp = ac.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=500+Math.random()*300; bp.Q.value=1.2;
+    const gain = ac.createGain();
+    gain.gain.setValueAtTime(0,t0);
+    gain.gain.linearRampToValueAtTime(0.045,t0+0.3);
+    gain.gain.linearRampToValueAtTime(0,t0+0.9);
+    src.connect(bp); bp.connect(gain); gain.connect(master());
+    src.start(t0);
+  }
+  function doorCreak(){
+    tone(140,0.6,'sawtooth',0.1,0,110);
+  }
+  function monsterGrowl(){
+    const ac = ensure();
+    const t0 = ac.currentTime;
+    const osc = ac.createOscillator(); osc.type='sawtooth';
+    osc.frequency.setValueAtTime(70+Math.random()*20,t0);
+    osc.frequency.linearRampToValueAtTime(42,t0+0.9);
+    const dist = makeDistortion(30);
+    const gain = ac.createGain();
+    gain.gain.setValueAtTime(0.0001,t0);
+    gain.gain.linearRampToValueAtTime(0.22,t0+0.2);
+    gain.gain.linearRampToValueAtTime(0.0001,t0+0.9);
+    osc.connect(dist); dist.connect(gain); gain.connect(master());
+    osc.start(t0); osc.stop(t0+1);
+  }
+  function weaponFire(style, power, hit){
+    power = power===undefined ? 0.5 : power;
+    if(style==='melee'){
+      noiseBurst(0.1, 0.28+power*0.15, 2200, 0);
+      tone(200,0.1,'sawtooth',0.18,0,80);
+    } else if(style==='stun'){
+      tone(1000,0.14,'square',0.28,0,1600);
+      tone(500,0.12,'sine',0.2,0.04);
+    } else if(style==='continuous'){
+      noiseBurst(0.1, 0.22, 4200, 0);
+      tone(140,0.1,'sawtooth',0.15,0,60);
+    } else {
+      const dist = makeDistortion(20+power*30);
+      const ac = ensure(); const t0 = ac.currentTime;
+      const osc = ac.createOscillator(); osc.type='square';
+      osc.frequency.setValueAtTime(90+power*40,t0);
+      osc.frequency.exponentialRampToValueAtTime(20,t0+0.25+power*0.3);
+      const gain = ac.createGain();
+      gain.gain.setValueAtTime(0.5+power*0.3,t0);
+      gain.gain.exponentialRampToValueAtTime(0.0001,t0+0.25+power*0.3);
+      osc.connect(dist); dist.connect(gain); gain.connect(master());
+      osc.start(t0); osc.stop(t0+0.6+power*0.3);
+      noiseBurst(0.18+power*0.3, 0.4+power*0.4, 2000, 0);
+    }
+    if(hit){ tone(1300,0.07,'sine',0.22,0.04); }
+  }
+  function monsterDefeated(){
+    [0,0.12,0.24].forEach((d,i)=> tone(190+i*130,0.35,'sine',0.25,d));
+    noiseBurst(0.5,0.35,2200,0.08);
+  }
+  function pickupChime(){
+    tone(660,0.12,'sine',0.25,0);
+    tone(880,0.18,'sine',0.2,0.08);
+  }
+  function keyChime(){
+    tone(520,0.1,'triangle',0.3,0);
+    tone(780,0.15,'triangle',0.25,0.07);
+    tone(1040,0.2,'triangle',0.2,0.14);
+  }
+  function unlockChime(){
+    tone(220,0.3,'sawtooth',0.3,0);
+    tone(440,0.4,'sine',0.25,0.1);
+  }
+  function loseSting(){
+    tone(140,1.2,'sawtooth',0.4,0,30);
+    noiseBurst(1.0,0.5,1500,0.05);
+  }
+  function winChime(){
+    [0,0.15,0.3,0.5].forEach((d,i)=> tone(330*(1+i*0.5),0.5,'sine',0.25,d));
+  }
+
+  let droneNodes = null;
+  function startDrone(){
+    const ac = ensure();
+    if(droneNodes) return;
+    const osc1 = ac.createOscillator(); osc1.type='sine'; osc1.frequency.value=48;
+    const osc2 = ac.createOscillator(); osc2.type='sine'; osc2.frequency.value=51;
+    const lfo = ac.createOscillator(); lfo.type='sine'; lfo.frequency.value=0.07;
+    const lfoGain = ac.createGain(); lfoGain.gain.value=6;
+    lfo.connect(lfoGain); lfoGain.connect(osc2.frequency);
+    const gain = ac.createGain(); gain.gain.value=0.05;
+    osc1.connect(gain); osc2.connect(gain); gain.connect(master());
+    osc1.start(); osc2.start(); lfo.start();
+    droneNodes = {osc1,osc2,lfo,gain};
+  }
+  function setDroneIntensity(v){
+    if(droneNodes) droneNodes.gain.gain.linearRampToValueAtTime(0.03+0.12*v, ensure().currentTime+0.3);
+  }
+  function stopDrone(){
+    if(!droneNodes) return;
+    try{ droneNodes.osc1.stop(); droneNodes.osc2.stop(); droneNodes.lfo.stop(); }catch(e){}
+    droneNodes = null;
+  }
+
+  function footstep(){ noiseBurst(0.06,0.12,900,0); }
+
+  let hbTimer = null, hbInterval = null;
+  function startHeartbeat(proximity){
+    proximity = proximity || 0;
+    const interval = Math.round(820 - proximity*480); // 820ms far -> ~340ms right on top of you
+    if(hbTimer && hbInterval===interval) return;
+    if(hbTimer) clearInterval(hbTimer);
+    hbInterval = interval;
+    const vol = 0.3 + proximity*0.25;
+    hbTimer = setInterval(()=>{
+      tone(55,0.18,'sine',vol,0);
+      tone(50,0.18,'sine',vol-0.05,interval/1000*0.3);
+    },interval);
+  }
+  function stopHeartbeat(){ if(hbTimer){ clearInterval(hbTimer); hbTimer=null; hbInterval=null; } }
+
+  return { ensure, jumpscareSting, preScareCue, pickupChime, keyChime, unlockChime, loseSting, winChime,
+           startDrone, stopDrone, setDroneIntensity, footstep, startHeartbeat, stopHeartbeat,
+           distantBang, distantWhisper, doorCreak, monsterGrowl, weaponFire, monsterDefeated, setMuted, isMuted };
+})();
+
+/* =========================================================
+   MAP DATA
+========================================================= */
+const TILE = 32, MAPW = 30, MAPH = 20;
+const WALL='#', FLOOR='.', DOOR='+', EXIT='=';
+
+const ROOMS = [
+  {name:"Entrance Foyer",   x:2, y:2, w:5, h:4, color:"#2a2420"},
+  {name:"Library",          x:10,y:2, w:6, h:4, color:"#231d16"},
+  {name:"Portrait Gallery", x:20,y:2, w:7, h:5, color:"#241a1a"},
+  {name:"Patient Ward",     x:2, y:9, w:6, h:5, color:"#1c2420"},
+  {name:"Kitchen",          x:11,y:9, w:6, h:4, color:"#20241c"},
+  {name:"Morgue",           x:20,y:9, w:7, h:5, color:"#1a2026"},
+  {name:"Supply Closet",    x:2, y:16,w:5, h:3, color:"#20181c"},
+  {name:"Front Hall",       x:11,y:16,w:8, h:3, color:"#262016"},
+  {name:"Matron's Office",  x:20,y:16,w:7, h:3, color:"#261616"},
+];
+const SCARE_ROOMS = {
+  "Morgue":"morgue", "Portrait Gallery":"gallery", "Supply Closet":"closet", "Matron's Office":"office"
+};
+
+let grid=[], roomIdGrid=[];
+function carveRect(x,y,w,h,roomIdx){
+  for(let yy=y; yy<y+h; yy++) for(let xx=x; xx<x+w; xx++){ grid[yy][xx]=FLOOR; roomIdGrid[yy][xx]=roomIdx; }
+}
+function carveH(y,x1,x2){ for(let x=x1;x<=x2;x++){ grid[y][x]=FLOOR; } }
+function carveV(x,y1,y2){ for(let y=y1;y<=y2;y++){ grid[y][x]=FLOOR; } }
+
+function generateMap(){
+  grid=[]; roomIdGrid=[];
+  for(let y=0;y<MAPH;y++){
+    const row=[], ridRow=[];
+    for(let x=0;x<MAPW;x++){ row.push(WALL); ridRow.push(-1); }
+    grid.push(row); roomIdGrid.push(ridRow);
+  }
+  ROOMS.forEach((r,i)=> carveRect(r.x,r.y,r.w,r.h,i));
+
+  carveH(3,7,9);     // Foyer - Library
+  carveH(4,16,19);   // Library - Gallery
+  carveV(4,6,8);     // Foyer - Ward
+  carveV(13,6,8);    // Library - Kitchen
+  carveV(23,7,8);    // Gallery - Morgue
+  carveH(11,8,10);   // Ward - Kitchen
+  carveH(11,17,19);  // Kitchen - Morgue
+  carveV(4,14,15);   // Ward - Closet
+  carveV(14,13,15);  // Kitchen - Front Hall
+  carveV(23,14,15);  // Morgue - Office
+  carveH(17,7,10);   // Closet - Front Hall
+  carveH(17,19,19);  // Front Hall - Office
+
+  // doors (cosmetic, walkable)
+  [[7,3],[16,4],[4,7],[13,7],[23,7],[9,11],[18,11],[4,15],[14,14],[23,15],[8,17],[19,17]].forEach(([x,y])=>{
+    if(grid[y][x]===FLOOR) grid[y][x]=DOOR;
+  });
+
+  grid[17][14]=EXIT; // exit tile in Front Hall
+}
+function isWallAt(tx,ty){
+  if(tx<0||ty<0||tx>=MAPW||ty>=MAPH) return true;
+  return grid[ty][tx]===WALL;
+}
+function tileAt(px,py){ return grid[Math.floor(py/TILE)]?.[Math.floor(px/TILE)]; }
+function roomIdAtPx(px,py){ const r=roomIdGrid[Math.floor(py/TILE)]; return r? r[Math.floor(px/TILE)] : -1; }
+
+/* Items */
+function P(tx,ty){ return {x:tx*TILE+TILE/2, y:ty*TILE+TILE/2}; }
+let KEYS, NOTES, HIDESPOTS, STUNITEMS, EXIT_PX, START_PX, MONSTER_WAYPOINTS;
+
+function shuffle(arr){
+  const a = arr.slice();
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+function randomSpotInRoom(roomName, avoid){
+  const room = ROOMS.find(r=>r.name===roomName);
+  avoid = avoid || [];
+  let best=null, bestD=-1;
+  for(let attempt=0; attempt<24; attempt++){
+    const tx = room.x+1+Math.floor(Math.random()*Math.max(1,room.w-2));
+    const ty = room.y+1+Math.floor(Math.random()*Math.max(1,room.h-2));
+    const pt = P(tx,ty);
+    let minD = Infinity;
+    avoid.forEach(a=>{ minD = Math.min(minD, Math.hypot(pt.x-a.x,pt.y-a.y)); });
+    if(minD>bestD){ bestD=minD; best=pt; }
+    if(minD>60) return pt;
+  }
+  return best || P(room.x+1,room.y+1);
+}
+
+const KEY_CANDIDATE_ROOMS = ["Library","Portrait Gallery","Patient Ward","Kitchen","Morgue","Supply Closet","Matron's Office"];
+
+function setupItems(){
+  NOTES = [
+    {...P(5,4),  id:0, room:"Entrance Foyer", taken:false,
+      title:"Admission Ledger",
+      text:"ENTRY 247: Patient M. Hollis, age 34, admitted for 'nervous hysteria' by order of Dr. Kane. Head Nurse Agnes Voss noted: 'patient resists treatment.' The entry ends mid-sentence. The rest of the page is scratched through, over and over, until the paper tore."},
+    {...P(22,3), id:1, room:"Portrait Gallery", taken:false,
+      title:"Turned Portrait",
+      text:"A row of portraits lines this hall — the Blackwood family, generations of them — and at the end, one frame turned to face the wall. The nameplate was pried off. Scratched into the wood underneath: 'SHE IS STILL ON SHIFT.'"},
+    {...P(5,11), id:2, room:"Patient Ward", taken:false,
+      title:"Water-Damaged Diary",
+      text:"'...Nurse Voss comes at night, after lights out. She doesn't need a lantern. I hear her counting beds. I am bed eleven. Last week, bed twelve stopped answering when she counted.'"},
+    {...P(14,10),id:3, room:"Kitchen", taken:false,
+      title:"Cook's Logbook",
+      text:"Final entry: 'No deliveries in six days. Dr. Kane says the phones are down. I told him I saw Nurse Voss carry a patient to the morgue who wasn't dead yet. He told me to get back to work.'"},
+    {...P(24,17),id:4, room:"Matron's Office", taken:false,
+      title:"Unsigned Memo",
+      text:"Typed, pinned above an empty desk: 'EFFECTIVE IMMEDIATELY: HEAD NURSE VOSS IS RELIEVED OF DUTY.' Beneath it, in another hand, over and over: 'SHE DIDN'T LEAVE. SHE DIDN'T LEAVE. SHE DIDN'T LEAVE.'"},
+  ];
+
+  const avoid = NOTES.map(n=>({x:n.x,y:n.y}));
+  const keyRooms = shuffle(KEY_CANDIDATE_ROOMS).slice(0,3);
+  KEYS = keyRooms.map((roomName,i)=>{
+    const pt = randomSpotInRoom(roomName, avoid);
+    avoid.push(pt);
+    return {...pt, id:'key'+i, room:roomName, taken:false};
+  });
+
+  const hideRooms = ["Patient Ward","Kitchen","Morgue","Matron's Office"];
+  HIDESPOTS = hideRooms.map((roomName,i)=>{
+    const pt = randomSpotInRoom(roomName, avoid);
+    avoid.push(pt);
+    return {...pt, id:'hide'+i, room:roomName, occupied:false};
+  });
+
+  const stunRooms = shuffle(KEY_CANDIDATE_ROOMS).slice(0,2);
+  STUNITEMS = stunRooms.map((roomName,i)=>{
+    const pt = randomSpotInRoom(roomName, avoid);
+    avoid.push(pt);
+    return {...pt, id:'stun'+i, room:roomName, taken:false};
+  });
+
+  EXIT_PX = P(14,17);
+  START_PX = P(4,3);
+  MONSTER_WAYPOINTS = [P(24,10), P(23,4), P(14,10), P(23,17)];
+}
+
+/* =========================================================
+   CHARACTERS
+========================================================= */
+const CHARACTERS = [
+  { id:'ellie', name:"Ellie Marsh", role:"Night Nurse",
+    bio:"Her sister Carol was a patient here thirty years ago. The closure records say Carol was transferred out. The transfer log Ellie found in a dumpster says otherwise.",
+    ability:"Steady Hands — flashlight battery drains 30% slower.",
+    speedMult:1.0, battMult:0.7, maxHearts:3, intuition:false,
+    win:"The transfer log in your pocket finally makes sense: Carol was never transferred anywhere. You don't look back at the door behind you. You tell yourself you don't need to.",
+    lose:"The counting continues. Somewhere behind you, a voice that isn't quite a voice says: 'Bed eleven, and now her sister too.'" },
+  { id:'jonah', name:"Jonah Pike", role:"Journalist",
+    bio:"Writing a feature on the asylum's 50th anniversary of closing, Jonah got an anonymous tip: 'ask about bed eleven.' He broke in after visiting hours to find out why.",
+    ability:"Quick Feet — moves 15% faster.",
+    speedMult:1.15, battMult:1.0, maxHearts:3, intuition:false,
+    win:"You'll never be able to publish this. Nobody would believe it — and standing in the cold outside, neither, quite, do you. That's the part that scares you most.",
+    lose:"The story breaks, just not the way you meant it to. Nobody ever finds the recorder." },
+  { id:'agatha', name:"Sister Agatha", role:"Former Patient",
+    bio:"Released decades ago, she never stopped dreaming of someone counting beds in the dark. She came back to find out if it was ever just a dream.",
+    ability:"Intuition — press Q to sense the Matron's direction.",
+    speedMult:1.0, battMult:1.0, maxHearts:3, intuition:true,
+    win:"The counting stops the instant you cross the threshold. For the first time in thirty years, you sleep that night without dreaming at all.",
+    lose:"The dream was never just a dream. Now it has a sequel." },
+  { id:'marcus', name:"Marcus Webb", role:"Security Guard",
+    bio:"On shift the week the asylum was finally condemned, Marcus was the one who called it in when the overnight census didn't match. He's been unable to let it go since.",
+    ability:"Hardened — one extra heart.",
+    speedMult:1.0, battMult:1.0, maxHearts:4, intuition:false,
+    win:"You radio it in, same as last time. This time, you don't wait around to see if anyone answers.",
+    lose:"The census won't match tonight either. It never will again." },
+];
+
+/* =========================================================
+   SKINS
+========================================================= */
+const SKINS = [
+  {id:'bone',     name:'Standard Issue', color:'#d9c9b0', unlock:null},
+  {id:'crimson',  name:'Crimson Ward',   color:'#e0493a', unlock:'win_any'},
+  {id:'spectral', name:'Spectral Blue',  color:'#5ec7d9', unlock:'win_nightmare'},
+  {id:'gold',     name:'Gilded',         color:'#e8c84a', unlock:'all_notes'},
+];
+const SKIN_UNLOCK_LABEL = {
+  win_any:'Unlocks: escape once',
+  win_nightmare:'Unlocks: escape on Nightmare',
+  all_notes:'Unlocks: find all pages in one run',
+};
+
+/* =========================================================
+   WEAPONS — developer mode only. Never available in normal play.
+========================================================= */
+const WEAPONS = {
+  knife:        {name:'Rusty Knife',      style:'melee',      range:70,   damage:35,  cooldown:0.45, tol:0.16, color:'#cfd8dc'},
+  poker:        {name:'Iron Poker',       style:'melee',      range:82,   damage:55,  cooldown:0.7,  tol:0.14, color:'#8a7a6a'},
+  stunbaton:    {name:'Stun Baton',       style:'stun',       range:75,   damage:0,   cooldown:0.9,  tol:0.16, color:'#5ec7d9'},
+  pistol:       {name:'Service Pistol',   style:'hitscan',    range:560,  damage:50,  cooldown:0.3,  tol:0.05, color:'#555'},
+  revolver:     {name:'Silver Revolver',  style:'hitscan',    range:620,  damage:80,  cooldown:0.6,  tol:0.045,color:'#ccc'},
+  shotgun:      {name:"Sawed-Off",        style:'hitscan',    range:220,  damage:140, cooldown:0.9,  tol:0.24, color:'#6b4a2a'},
+  crossbow:     {name:'Crossbow',         style:'hitscan',    range:760,  damage:120, cooldown:1.3,  tol:0.035,color:'#4a3a2a'},
+  flamethrower: {name:'Flamethrower',     style:'continuous', range:170,  damage:16,  tick:0.12,     tol:0.2,  color:'#e86a1a'},
+  holywater:    {name:'Holy Water Flask', style:'hitscan',    range:260,  damage:65,  cooldown:1.0,  tol:0.17, color:'#9ad1ff', stun:true},
+  rocket:       {name:'Rocket Launcher',  style:'hitscan',    range:1000, damage:999, cooldown:3.0,  tol:0.28, color:'#aa2222', big:true},
+};
+const WEAPON_ORDER = ['knife','poker','stunbaton','pistol','revolver','shotgun','crossbow','flamethrower','holywater','rocket'];
+
+/* =========================================================
+   LOCAL PROFILE SYSTEM (device-local only — not a real account)
+========================================================= */
+function simpleHash(str){
+  let h=0;
+  for(let i=0;i<str.length;i++){ h = (Math.imul(31,h) + str.charCodeAt(i))|0; }
+  return (h>>>0).toString(16);
+}
+function blankProfileData(){ return {pinHash:null, bestTime:null, unlockedSkins:['bone'], selectedSkin:'bone'}; }
+let memCurrentUser = null, memProfiles = null, memGuestData = null;
+function currentUsername(){
+  if(memCurrentUser===null){
+    try{ memCurrentUser = localStorage.getItem('blackwood_current_user')||''; }catch(e){ memCurrentUser=''; }
+  }
+  return memCurrentUser;
+}
+function setCurrentUsername(u){
+  memCurrentUser = u||'';
+  try{ localStorage.setItem('blackwood_current_user', u||''); }catch(e){}
+  // switching identity — in or out — always re-locks Developer Mode and clears active cheats
+  devModeMemory = false;
+  try{ localStorage.removeItem('blackwood_devmode'); }catch(e){}
+  if(typeof state!=='undefined' && state.cheats){
+    state.cheats = { god:false, infiniteBattery:false, noclip:false, freezeMonster:false, revealMap:false,
+      superSpeed:false, xray:false, debugInfo:false, monsterSpeedMult:1, weapon:'none' };
+  }
+}
+function loadProfiles(){
+  if(!memProfiles){
+    try{ memProfiles = JSON.parse(localStorage.getItem('blackwood_profiles')||'{}'); }catch(e){ memProfiles = {}; }
+  }
+  return memProfiles;
+}
+function saveProfiles(p){
+  memProfiles = p;
+  try{ localStorage.setItem('blackwood_profiles', JSON.stringify(p)); }catch(e){}
+}
+function loadGuestData(){
+  if(!memGuestData){
+    try{ memGuestData = JSON.parse(localStorage.getItem('blackwood_guest')) || blankProfileData(); }catch(e){ memGuestData = blankProfileData(); }
+  }
+  return memGuestData;
+}
+function saveGuestData(g){
+  memGuestData = g;
+  try{ localStorage.setItem('blackwood_guest', JSON.stringify(g)); }catch(e){}
+}
+
+function getActiveProfileData(){
+  const u = currentUsername();
+  if(u){ const profiles = loadProfiles(); return profiles[u] || blankProfileData(); }
+  return loadGuestData();
+}
+function setActiveProfileData(data){
+  const u = currentUsername();
+  if(u){ const profiles = loadProfiles(); profiles[u] = data; saveProfiles(profiles); }
+  else { saveGuestData(data); }
+}
+function signUpProfile(username, pin){
+  username = (username||'').trim();
+  if(username.length<2) return {ok:false, msg:'Username needs at least 2 characters.'};
+  if((pin||'').length<4) return {ok:false, msg:'PIN needs at least 4 characters.'};
+  const profiles = loadProfiles();
+  if(profiles[username]) return {ok:false, msg:'That username is already taken on this device.'};
+  profiles[username] = {...blankProfileData(), pinHash:simpleHash(pin)};
+  saveProfiles(profiles);
+  setCurrentUsername(username);
+  return {ok:true, msg:`Profile "${username}" created.`};
+}
+function logInProfile(username, pin){
+  username = (username||'').trim();
+  const profiles = loadProfiles();
+  const prof = profiles[username];
+  if(!prof) return {ok:false, msg:'No profile with that username on this device.'};
+  if(prof.pinHash !== simpleHash(pin||'')) return {ok:false, msg:'Incorrect PIN.'};
+  setCurrentUsername(username);
+  return {ok:true, msg:`Welcome back, ${username}.`};
+}
+function logOutProfile(){ setCurrentUsername(''); }
+
+function isSkinUnlocked(skinId){
+  const d = getActiveProfileData();
+  return (d.unlockedSkins||['bone']).includes(skinId);
+}
+function unlockSkin(skinId){
+  const d = getActiveProfileData();
+  if(!d.unlockedSkins) d.unlockedSkins = ['bone'];
+  if(!d.unlockedSkins.includes(skinId)){ d.unlockedSkins.push(skinId); setActiveProfileData(d); return true; }
+  return false;
+}
+function getSelectedSkin(){
+  const d = getActiveProfileData();
+  return SKINS.find(s=>s.id===d.selectedSkin) || SKINS[0];
+}
+function selectSkin(skinId){
+  if(!isSkinUnlocked(skinId)) return;
+  const d = getActiveProfileData();
+  d.selectedSkin = skinId;
+  setActiveProfileData(d);
+}
+
+/* =========================================================
+   SAVE / LOAD (per-profile, device-local)
+========================================================= */
+let memRunSaves = {};
+function saveSlotKey(){ return 'blackwood_save_' + (currentUsername() || 'guest'); }
+function buildSaveData(){
+  return {
+    characterId: state.character.id,
+    nightmare: state.nightmare,
+    player: {x:state.player.x, y:state.player.y, angle:state.player.angle},
+    hearts: state.hearts, battery: state.battery, stamina: state.stamina,
+    keysCollected: state.keysCollected, notesCollected: state.notesCollected,
+    visitedRooms: state.visitedRooms, scaredRooms: state.scaredRooms,
+    hunted: state.hunted, elapsed: state.elapsed,
+    flashlightOn: state.flashlightOn, lastRoomId: state.lastRoomId,
+    hasStunGun: state.hasStunGun, stunCharges: state.stunCharges,
+    keys: KEYS.map(k=>({id:k.id, x:k.x, y:k.y, room:k.room, taken:k.taken})),
+    notes: NOTES.map(n=>({id:n.id, taken:n.taken})),
+    hidespots: HIDESPOTS.map(h=>({id:h.id, x:h.x, y:h.y, room:h.room})),
+    stunitems: STUNITEMS.map(s=>({id:s.id, x:s.x, y:s.y, room:s.room, taken:s.taken})),
+    savedAt: Date.now(),
+  };
+}
+function saveRunState(){
+  if(state.screen!=='playing') return;
+  const key = saveSlotKey();
+  const data = buildSaveData();
+  memRunSaves[key] = data;
+  try{ localStorage.setItem(key, JSON.stringify(data)); }catch(e){}
+}
+function loadRunState(){
+  const key = saveSlotKey();
+  if(memRunSaves[key]) return memRunSaves[key];
+  try{
+    const raw = localStorage.getItem(key);
+    if(raw){ const parsed = JSON.parse(raw); memRunSaves[key] = parsed; return parsed; }
+  }catch(e){}
+  return null;
+}
+function clearRunState(){
+  const key = saveSlotKey();
+  delete memRunSaves[key];
+  try{ localStorage.removeItem(key); }catch(e){}
+}
+
+/* =========================================================
+   DEVELOPER MODE
+========================================================= */
+const DEV_CODE = 'HenryOliver2026#claudecode';
+let devModeMemory = false;
+function isDevModeUnlocked(){
+  if(devModeMemory) return true;
+  try{ return localStorage.getItem('blackwood_devmode')==='1'; }catch(e){ return false; }
+}
+function unlockDevMode(){
+  devModeMemory = true;
+  try{ localStorage.setItem('blackwood_devmode','1'); }catch(e){}
+}
+
+/* =========================================================
+   GAME STATE
+========================================================= */
+const state = {
+  screen:'menu', // menu, select, playing, paused, gameover, win
+  character:null,
+  player:null,
+  monster:null,
+  keysCollected:0,
+  notesCollected:0,
+  stunCharges:0,
+  hasStunGun:false,
+  stunGunCooldown:0,
+  lastRoomId:-1,
+  visitedRooms:{},
+  scaredRooms:{},
+  fear:0,
+  flashlightOn:false,
+  battery:100,
+  stamina:100,
+  hearts:3,
+  invuln:0,
+  jumpscareLock:0,
+  ambientTimer:0,
+  lastStepT:0,
+  abilityCooldown:0,
+  abilityActiveT:0,
+  journalOpen:false,
+  paused:false,
+  keys:new Set(),
+  hiding:false,
+  nearHideSpot:null,
+  nightmare:false,
+  elapsed:0,
+  ambientSoundTimer:0,
+  hunted:false,
+  afterGlowT:0,
+  minimapOn:false,
+  devMode:false,
+  cheats:{ god:false, infiniteBattery:false, noclip:false, freezeMonster:false, revealMap:false,
+    superSpeed:false, xray:false, debugInfo:false, monsterSpeedMult:1, weapon:'none' },
+  firing:false,
+  weaponCooldown:0,
+  weaponTick:0,
+  weaponKickT:0,
+  muzzleFlashT:0,
+  autosaveTimer:0,
+  growlCooldown:4,
+  hideTimer:0,
+};
+
+function resetGameState(){
+  const c = state.character;
+  state.player = { x:START_PX.x, y:START_PX.y, r:11, angle:0 };
+  state.monster = { x:MONSTER_WAYPOINTS[0].x, y:MONSTER_WAYPOINTS[0].y, r:13,
+    mode:'chase', retreatT:0, stuckT:0, lastKnownX:undefined, lastKnownY:undefined,
+    health:100, defeatedT:0 };
+  state.keysCollected = 0;
+  state.notesCollected = 0;
+  state.stunCharges = 0;
+  state.hasStunGun = false;
+  state.stunGunCooldown = 0;
+  state.lastRoomId = -1;
+  state.visitedRooms = {};
+  state.scaredRooms = {};
+  state.fear = 0;
+  state.flashlightOn = false;
+  state.battery = 100;
+  state.stamina = 100;
+  state.hearts = c.maxHearts;
+  state.invuln = 1.0;
+  state.jumpscareLock = 0;
+  state.ambientTimer = 14;
+  state.abilityCooldown = 0;
+  state.abilityActiveT = 0;
+  state.keys.clear();
+  state.hiding = false;
+  state.nearHideSpot = null;
+  state.elapsed = 0;
+  state.ambientSoundTimer = 8 + Math.random()*10;
+  state.hunted = false;
+  state.afterGlowT = 0;
+  state.autosaveTimer = 5;
+  state.growlCooldown = 6;
+  state.firing = false;
+  state.weaponCooldown = 0;
+  state.weaponTick = 0;
+  state.weaponKickT = 0;
+  state.muzzleFlashT = 0;
+  setupItems();
+}
+
+/* =========================================================
+   UI WIRING
+========================================================= */
+const el = (id)=>document.getElementById(id);
+function show(id){ el(id).classList.remove('hidden'); }
+function hide(id){ el(id).classList.add('hidden'); }
+
+function formatTime(sec){
+  sec = Math.max(0, Math.floor(sec));
+  const m = Math.floor(sec/60), s = sec%60;
+  return m+':'+String(s).padStart(2,'0');
+}
+function loadBestTime(){
+  const d = getActiveProfileData();
+  return (typeof d.bestTime === 'number') ? d.bestTime : null;
+}
+function saveBestTimeIfBetter(sec){
+  const d = getActiveProfileData();
+  if(d.bestTime==null || sec<d.bestTime){
+    d.bestTime = sec;
+    setActiveProfileData(d);
+    return true;
+  }
+  return false;
+}
+function updateBestTimeLine(){
+  const best = loadBestTime();
+  const u = currentUsername();
+  const who = u ? ` (${u})` : '';
+  el('bestTimeLine').textContent = best===null ? '' : `Fastest escape${who}: ${formatTime(best)}`;
+}
+
+function buildCharSelect(){
+  const grid = el('charGrid');
+  grid.innerHTML='';
+  CHARACTERS.forEach(c=>{
+    const card = document.createElement('div');
+    card.className='charCard';
+    card.innerHTML = `<h3>${c.name}</h3><div class="role">${c.role}</div><p>${c.bio}</p><div class="ability"><b>Ability:</b> ${c.ability}</div>`;
+    card.addEventListener('click', ()=>{
+      state.nightmare = !!el('chkNightmare').checked;
+      startGame(c);
+    });
+    grid.appendChild(card);
+  });
+}
+
+function startGame(character){
+  Audio_.ensure();
+  state.character = character;
+  resetGameState();
+  if(state.nightmare){ state.battery = 60; }
+  state.screen='playing';
+  hide('screen-menu'); hide('screen-select'); hide('gameoverScreen'); hide('winScreen'); hide('pauseScreen'); hide('journal');
+  show('hud');
+  el('hud').classList.remove('hidden');
+  Audio_.startDrone();
+  state.paused=false;
+  lastTime = performance.now();
+  saveRunState();
+}
+
+function continueGame(){
+  const save = loadRunState();
+  if(!save) return;
+  Audio_.ensure();
+  const character = CHARACTERS.find(c=>c.id===save.characterId) || CHARACTERS[0];
+  state.character = character;
+  state.nightmare = !!save.nightmare;
+  resetGameState();
+
+  state.player.x = save.player.x; state.player.y = save.player.y; state.player.angle = save.player.angle;
+  state.hearts = save.hearts;
+  state.battery = save.battery;
+  state.stamina = save.stamina;
+  state.keysCollected = save.keysCollected;
+  state.notesCollected = save.notesCollected;
+  state.visitedRooms = save.visitedRooms || {};
+  state.scaredRooms = save.scaredRooms || {};
+  state.hunted = !!save.hunted;
+  state.elapsed = save.elapsed || 0;
+  state.flashlightOn = !!save.flashlightOn;
+  state.lastRoomId = (typeof save.lastRoomId==='number') ? save.lastRoomId : -1;
+  state.hasStunGun = !!save.hasStunGun;
+  state.stunCharges = save.stunCharges || 0;
+
+  if(Array.isArray(save.keys)) KEYS = save.keys.map(k=>({...k}));
+  if(Array.isArray(save.hidespots)) HIDESPOTS = save.hidespots.map(h=>({...h, occupied:false}));
+  if(Array.isArray(save.notes)){
+    save.notes.forEach(sn=>{ const n = NOTES.find(x=>x.id===sn.id); if(n) n.taken = sn.taken; });
+  }
+  if(Array.isArray(save.stunitems)) STUNITEMS = save.stunitems.map(s=>({...s}));
+
+  state.screen='playing';
+  hide('screen-menu'); hide('screen-select'); hide('gameoverScreen'); hide('winScreen'); hide('pauseScreen'); hide('journal');
+  show('hud');
+  Audio_.startDrone();
+  state.paused=false;
+  lastTime = performance.now();
+}
+
+function updateContinueUI(){
+  const save = loadRunState();
+  const btn = el('btnContinue');
+  const line = el('continueLine');
+  if(save){
+    const ch = CHARACTERS.find(c=>c.id===save.characterId);
+    const roomName = (ROOMS[save.lastRoomId]||{}).name || 'Blackwood Asylum';
+    line.textContent = `Saved progress: ${ch?ch.name:'Unknown'} — ${roomName} — ${save.keysCollected}/3 keys`;
+    btn.classList.remove('hidden');
+    el('btnBegin').textContent = 'New Game';
+  } else {
+    line.textContent = '';
+    btn.classList.add('hidden');
+    el('btnBegin').textContent = 'Enter, If You Dare';
+  }
+}
+
+function goMenu(){
+  state.screen='menu';
+  Audio_.stopDrone(); Audio_.stopHeartbeat();
+  hide('screen-select'); hide('gameoverScreen'); hide('winScreen'); hide('pauseScreen'); hide('journal');
+  el('hud').classList.add('hidden');
+  updateBestTimeLine();
+  updateContinueUI();
+  show('screen-menu');
+}
+updateBestTimeLine();
+updateContinueUI();
+
+el('btnContinue').addEventListener('click', continueGame);
+el('btnBegin').addEventListener('click', ()=>{
+  Audio_.ensure();
+  hide('screen-menu'); buildCharSelect(); show('screen-select');
+});
+el('btnResume').addEventListener('click', ()=> togglePause(false));
+el('btnRestartFromPause').addEventListener('click', ()=>{ togglePause(false); startGame(state.character); });
+el('btnQuitToMenu').addEventListener('click', ()=>{ togglePause(false); goMenu(); });
+el('btnRetry').addEventListener('click', ()=> startGame(state.character));
+el('btnGoMenuFromOver').addEventListener('click', goMenu);
+el('btnPlayAgain').addEventListener('click', goMenu);
+
+function updateMuteBtn(){
+  el('muteBtn').textContent = Audio_.isMuted() ? '🔇' : '🔊';
+}
+el('muteBtn').addEventListener('click', ()=>{
+  Audio_.ensure();
+  Audio_.setMuted(!Audio_.isMuted());
+  updateMuteBtn();
+});
+updateMuteBtn();
+
+function togglePause(forceVal){
+  const val = (typeof forceVal==='boolean') ? forceVal : !state.paused;
+  state.paused = val;
+  if(val){ show('pauseScreen'); saveRunState(); } else { hide('pauseScreen'); lastTime=performance.now(); }
+}
+window.addEventListener('beforeunload', ()=>{ if(state.screen==='playing') saveRunState(); });
+
+/* =========================================================
+   SETTINGS SCREEN
+========================================================= */
+let settingsReturnTo = 'menu';
+function openSettings(from){
+  settingsReturnTo = from;
+  if(from==='menu'){ hide('screen-menu'); } else { hide('pauseScreen'); }
+  renderSettings();
+  show('screen-settings');
+}
+function closeSettings(){
+  hide('screen-settings');
+  if(settingsReturnTo==='pause'){ show('pauseScreen'); }
+  else { updateBestTimeLine(); updateContinueUI(); show('screen-menu'); }
+}
+function renderSettings(){
+  const u = currentUsername();
+  el('profileStatus').textContent = u ? `Logged in as: ${u}` : 'Playing as Guest (not signed in)';
+  el('profileLoggedOut').classList.toggle('hidden', !!u);
+  el('profileLoggedIn').classList.toggle('hidden', !u);
+  el('profileMsg').textContent = '';
+  el('profileMsg').className = 'settingsMsg';
+
+  const data = getActiveProfileData();
+  const grid = el('skinGrid');
+  grid.innerHTML = '';
+  SKINS.forEach(s=>{
+    const unlocked = (data.unlockedSkins||['bone']).includes(s.id);
+    const div = document.createElement('div');
+    div.className = 'skinSwatch' + (unlocked?' unlocked':'') + (data.selectedSkin===s.id?' selected':'');
+    div.innerHTML = `<div class="dot" style="background:${s.color};"></div><div class="name">${s.name}</div>`
+      + (unlocked ? '' : `<div class="lockNote">${SKIN_UNLOCK_LABEL[s.unlock]||'Locked'}</div>`);
+    if(unlocked){
+      div.addEventListener('click', ()=>{ selectSkin(s.id); renderSettings(); });
+    }
+    grid.appendChild(div);
+  });
+
+  const devUnlocked = isDevModeUnlocked();
+  state.devMode = devUnlocked;
+  el('devLocked').classList.toggle('hidden', devUnlocked);
+  el('devUnlocked').classList.toggle('hidden', !devUnlocked);
+  if(devUnlocked){
+    el('chkGod').checked = state.cheats.god;
+    el('chkInfiniteBattery').checked = state.cheats.infiniteBattery;
+    el('chkNoclip').checked = state.cheats.noclip;
+    el('chkSuperSpeed').checked = state.cheats.superSpeed;
+    el('chkFreezeMonster').checked = state.cheats.freezeMonster;
+    el('chkXray').checked = state.cheats.xray;
+    el('chkRevealMap').checked = state.cheats.revealMap;
+    el('chkForceHunted').checked = state.hunted;
+    el('chkDebugInfo').checked = state.cheats.debugInfo;
+
+    const wgrid = el('weaponGrid');
+    wgrid.innerHTML = '';
+    const makeWeaponBtn = (id,label)=>{
+      const b = document.createElement('button');
+      b.textContent = label;
+      if(state.cheats.weapon===id){ b.style.background='var(--blood)'; b.style.color='#fff'; }
+      b.addEventListener('click', ()=>{ state.cheats.weapon = id; renderSettings(); });
+      wgrid.appendChild(b);
+    };
+    makeWeaponBtn('none','None');
+    WEAPON_ORDER.forEach(id=> makeWeaponBtn(id, WEAPONS[id].name));
+  }
+}
+
+el('btnSettingsFromMenu').addEventListener('click', ()=> openSettings('menu'));
+el('btnSettingsFromPause').addEventListener('click', ()=> openSettings('pause'));
+el('btnSettingsBack').addEventListener('click', closeSettings);
+
+el('btnSignUp').addEventListener('click', ()=>{
+  const r = signUpProfile(el('suUsername').value, el('suPin').value);
+  const m = el('profileMsg'); m.textContent = r.msg; m.className = 'settingsMsg ' + (r.ok?'ok':'err');
+  if(r.ok) renderSettings();
+});
+el('btnLogIn').addEventListener('click', ()=>{
+  const r = logInProfile(el('suUsername').value, el('suPin').value);
+  const m = el('profileMsg'); m.textContent = r.msg; m.className = 'settingsMsg ' + (r.ok?'ok':'err');
+  if(r.ok) renderSettings();
+});
+el('btnLogOut').addEventListener('click', ()=>{ logOutProfile(); renderSettings(); });
+
+el('btnDevUnlock').addEventListener('click', ()=>{
+  const v = el('devCodeInput').value;
+  const m = el('devMsg');
+  if(v === DEV_CODE){
+    unlockDevMode();
+    m.textContent = ''; m.className = 'settingsMsg';
+    renderSettings();
+  } else {
+    m.textContent = 'Incorrect code.'; m.className = 'settingsMsg err';
+  }
+});
+el('chkGod').addEventListener('change', e=> state.cheats.god = e.target.checked);
+el('chkInfiniteBattery').addEventListener('change', e=> state.cheats.infiniteBattery = e.target.checked);
+el('chkNoclip').addEventListener('change', e=> state.cheats.noclip = e.target.checked);
+el('chkSuperSpeed').addEventListener('change', e=> state.cheats.superSpeed = e.target.checked);
+el('chkFreezeMonster').addEventListener('change', e=> state.cheats.freezeMonster = e.target.checked);
+el('chkXray').addEventListener('change', e=> state.cheats.xray = e.target.checked);
+el('chkRevealMap').addEventListener('change', e=> state.cheats.revealMap = e.target.checked);
+el('chkForceHunted').addEventListener('change', e=> state.hunted = e.target.checked);
+el('chkDebugInfo').addEventListener('change', e=> state.cheats.debugInfo = e.target.checked);
+
+el('btnCheatAllKeys').addEventListener('click', ()=>{
+  if(state.screen==='playing'){ KEYS.forEach(k=>k.taken=true); state.keysCollected = 3; }
+});
+el('btnCheatTeleportExit').addEventListener('click', ()=>{
+  if(state.screen==='playing'){ state.player.x = EXIT_PX.x; state.player.y = EXIT_PX.y; }
+});
+el('btnCheatResetScares').addEventListener('click', ()=>{ state.scaredRooms = {}; });
+el('btnCheatWin').addEventListener('click', ()=>{ if(state.screen==='playing') winGame(); });
+el('btnCheatHeal').addEventListener('click', ()=>{
+  if(state.screen==='playing') state.hearts = state.character.maxHearts;
+});
+el('btnCheatRefill').addEventListener('click', ()=>{
+  if(state.screen==='playing'){ state.battery=100; state.stamina=100; }
+});
+el('btnCheatKill').addEventListener('click', ()=>{ if(state.screen==='playing') loseGame(); });
+el('btnCheatMonsterHere').addEventListener('click', ()=>{
+  if(state.screen!=='playing') return;
+  const p = state.player, m = state.monster;
+  m.x = p.x + Math.cos(p.angle)*80; m.y = p.y + Math.sin(p.angle)*80;
+});
+el('btnCheatMonsterAway').addEventListener('click', ()=>{
+  if(state.screen!=='playing') return;
+  state.monster.x = MONSTER_WAYPOINTS[0].x; state.monster.y = MONSTER_WAYPOINTS[0].y;
+  state.monster.mode='retreat'; state.monster.retreatT=3;
+});
+document.querySelectorAll('#devMenu button[data-speed]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{ state.cheats.monsterSpeedMult = parseFloat(btn.dataset.speed); });
+});
+document.querySelectorAll('#devMenu button[data-scare]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{ if(state.screen==='playing') triggerJumpscare(btn.dataset.scare); });
+});
+el('btnDevDisable').addEventListener('click', ()=>{
+  devModeMemory = false;
+  try{ localStorage.removeItem('blackwood_devmode'); }catch(e){}
+  state.cheats = { god:false, infiniteBattery:false, noclip:false, freezeMonster:false, revealMap:false,
+    superSpeed:false, xray:false, debugInfo:false, monsterSpeedMult:1, weapon:'none' };
+  el('devCodeInput').value = '';
+  renderSettings();
+});
+
+/* =========================================================
+   JOURNAL
+========================================================= */
+function renderJournal(){
+  const c = state.character;
+  let html = `<h2>${c.name}'s Journal</h2>`;
+  html += `<div class="entry"><b>${c.name}</b> — ${c.role}<br><br>${c.bio}</div>`;
+  html += `<h2 style="font-size:16px;">Found Pages (${state.notesCollected}/${NOTES.length})</h2>`;
+  NOTES.forEach(n=>{
+    if(n.taken){
+      html += `<div class="entry"><b>${n.title}</b><br>${n.text}</div>`;
+    } else {
+      html += `<div class="entry locked">??? — undiscovered page, somewhere in the ${n.room}.</div>`;
+    }
+  });
+  html += `<div class="closeNote">Press J to close</div>`;
+  el('journal').innerHTML = html;
+}
+function toggleJournal(){
+  state.journalOpen = !state.journalOpen;
+  if(state.journalOpen){ renderJournal(); show('journal'); } else { hide('journal'); }
+}
+
+/* =========================================================
+   INPUT
+========================================================= */
+window.addEventListener('keydown', (e)=>{
+  state.keys.add(e.code);
+  if(state.screen!=='playing') return;
+  if(e.code==='KeyF'){ toggleFlashlight(); }
+  if(e.code==='KeyJ'){ toggleJournal(); }
+  if(e.code==='Escape'){ if(!state.journalOpen) togglePause(); }
+  if(e.code==='KeyQ'){ useAbility(); }
+  if(e.code==='KeyE'){ toggleHide(); }
+  if(e.code==='KeyM'){ state.minimapOn = !state.minimapOn; }
+});
+window.addEventListener('keyup', (e)=> state.keys.delete(e.code));
+
+/* ---- mouse-look / pointer lock ---- */
+const MOUSE_SENS = 0.0022;
+function wantsPointerLock(){ return state.screen==='playing' && !state.paused && !state.journalOpen && !state.hiding; }
+function updateLookPrompt(){
+  const locked = document.pointerLockElement === canvas;
+  if(locked && !wantsPointerLock() && document.exitPointerLock){ document.exitPointerLock(); }
+  el('clickToLook').classList.toggle('hidden', !wantsPointerLock() || locked);
+  el('crosshair').classList.toggle('hidden', !wantsPointerLock());
+}
+el('clickToLook').addEventListener('click', ()=>{
+  if(wantsPointerLock() && canvas.requestPointerLock){
+    const p = canvas.requestPointerLock();
+    if(p && p.catch) p.catch(()=>{});
+  }
+});
+document.addEventListener('pointerlockchange', ()=>{
+  if(document.pointerLockElement!==canvas && state.screen==='playing' && !state.paused && !state.journalOpen){
+    togglePause(true);
+  }
+  updateLookPrompt();
+});
+document.addEventListener('mousemove', (e)=>{
+  if(document.pointerLockElement===canvas && state.screen==='playing' && !state.paused && !state.journalOpen && !state.hiding){
+    state.player.angle += e.movementX * MOUSE_SENS;
+  }
+});
+document.addEventListener('mousedown', (e)=>{
+  if(e.button===0 && document.pointerLockElement===canvas && wantsPointerLock()){ state.firing = true; }
+});
+document.addEventListener('mouseup', (e)=>{ if(e.button===0) state.firing = false; });
+
+function toggleFlashlight(){
+  if(!state.flashlightOn && state.battery<=1) return;
+  state.flashlightOn = !state.flashlightOn;
+}
+function useAbility(){
+  const c = state.character;
+  if(!c || !c.intuition) return;
+  if(state.abilityCooldown>0) return;
+  state.abilityActiveT = 3.0;
+  state.abilityCooldown = 15.0;
+}
+function toggleHide(){
+  if(state.journalOpen || state.paused) return;
+  if(state.hiding){
+    state.hiding = false;
+    el('hideOverlay').classList.remove('on');
+    return;
+  }
+  if(state.nearHideSpot){
+    state.hiding = true;
+    state.hideTimer = MAX_HIDE_TIME;
+    el('hideOverlay').classList.add('on');
+    showHint('', 1);
+  }
+}
+
+/* =========================================================
+   JUMPSCARE PRESENTATION
+========================================================= */
+const FACE_SVGS = [
+`<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <filter id="sk"><feTurbulence type="fractalNoise" baseFrequency="0.09" numOctaves="2" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="6"/></filter>
+  <g filter="url(#sk)">
+    <ellipse cx="100" cy="100" rx="70" ry="90" fill="#cdbfa8"/>
+    <ellipse cx="70" cy="88" rx="16" ry="24" fill="#0a0202"/>
+    <ellipse cx="130" cy="88" rx="16" ry="24" fill="#0a0202"/>
+    <ellipse cx="70" cy="88" rx="16" ry="24" fill="none" stroke="#a81212" stroke-width="2"/>
+    <ellipse cx="130" cy="88" rx="16" ry="24" fill="none" stroke="#a81212" stroke-width="2"/>
+    <circle cx="70" cy="86" r="4" fill="#ff2222"/>
+    <circle cx="130" cy="86" r="4" fill="#ff2222"/>
+    <path d="M48 145 Q100 200 152 145 Q100 115 48 145Z" fill="#1a0505"/>
+    <path d="M55 146 L64 168 L73 146 L82 168 L91 146 L100 168 L109 146 L118 168 L127 146 L136 168 L145 146"
+          stroke="#f4ece0" stroke-width="4" fill="none"/>
+    <path d="M35 45 Q70 5 100 35 Q130 5 165 45" stroke="#0a0202" stroke-width="9" fill="none"/>
+    <path d="M40 60 L160 140 M160 60 L40 140" stroke="#5a0808" stroke-width="1.5" opacity="0.5"/>
+  </g>
+</svg>`,
+`<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <path d="M100 8 C36 8 16 82 28 144 C40 196 160 196 172 144 C184 82 164 8 100 8Z" fill="#b8ab98"/>
+  <circle cx="66" cy="96" r="22" fill="#030303"/>
+  <circle cx="134" cy="96" r="22" fill="#030303"/>
+  <circle cx="66" cy="96" r="6" fill="#d41818"/>
+  <circle cx="134" cy="96" r="6" fill="#d41818"/>
+  <circle cx="66" cy="96" r="24" fill="none" stroke="#700" stroke-width="2"/>
+  <circle cx="134" cy="96" r="24" fill="none" stroke="#700" stroke-width="2"/>
+  <path d="M46 150 Q100 136 154 150 Q142 190 100 192 Q58 190 46 150Z" fill="#0c0202"/>
+  <path d="M60 155 L66 172 M78 160 L82 178 M96 162 L98 180 M114 160 L112 178 M132 155 L128 172"
+        stroke="#e8dcc8" stroke-width="3"/>
+  <path d="M20 40 L55 10 M180 40 L145 10" stroke="#1a0808" stroke-width="10" stroke-linecap="round"/>
+</svg>`,
+`<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <rect x="14" y="6" width="172" height="190" fill="#e4ddcc"/>
+  <path d="M50 65 L85 108 L50 142" stroke="#040404" stroke-width="11" fill="none"/>
+  <path d="M150 65 L115 108 L150 142" stroke="#040404" stroke-width="11" fill="none"/>
+  <path d="M35 155 Q100 205 165 155" stroke="#040404" stroke-width="11" fill="none"/>
+  <path d="M20 14 L180 190 M180 14 L20 190" stroke="#8a1414" stroke-width="5" opacity="0.55"/>
+  <circle cx="60" cy="100" r="3" fill="#a81212"/><circle cx="140" cy="100" r="3" fill="#a81212"/>
+</svg>`,
+`<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <filter id="sk2"><feTurbulence type="turbulence" baseFrequency="0.015 0.12" numOctaves="2" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="14"/></filter>
+  <g filter="url(#sk2)">
+    <ellipse cx="100" cy="104" rx="76" ry="88" fill="#231414"/>
+    <ellipse cx="72" cy="92" rx="10" ry="30" fill="#ff1a1a"/>
+    <ellipse cx="128" cy="92" rx="10" ry="30" fill="#ff1a1a"/>
+    <path d="M40 150 Q100 210 160 150 Q100 170 40 150Z" fill="#000"/>
+    <path d="M48 150 L58 178 L68 150 L78 178 L88 150 L98 178 L108 150 L118 178 L128 150 L138 178 L150 150"
+          stroke="#fff" stroke-width="3" fill="none"/>
+  </g>
+</svg>`,
+`<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="100" cy="100" rx="68" ry="92" fill="#d7cbb4"/>
+  <path d="M55 75 Q70 55 85 75" stroke="#050505" stroke-width="7" fill="none"/>
+  <path d="M115 75 Q130 55 145 75" stroke="#050505" stroke-width="7" fill="none"/>
+  <ellipse cx="70" cy="92" rx="8" ry="16" fill="#050505"/>
+  <ellipse cx="130" cy="92" rx="8" ry="16" fill="#050505"/>
+  <path d="M42 140 Q100 210 158 140 Q100 108 42 140Z" fill="#160404"/>
+  <path d="M55 142 L62 185 L70 142 L78 185 L86 142 L94 185 L102 142 L110 185 L118 142 L126 185 L134 142 L142 185 L150 142"
+        stroke="#fff" stroke-width="3.5" fill="none"/>
+  <path d="M30 30 L170 170" stroke="#8a1414" stroke-width="2" opacity="0.6"/>
+</svg>`
+];
+
+function triggerJumpscare(kind, opts){
+  opts = opts || {};
+  if(!opts.chained && state.jumpscareLock>0) return;
+  const tier = kind||'scripted';
+  const skipPrelude = (tier==='ambient') || opts.chained;
+  const preludeDur = tier==='final' ? 0.42+Math.random()*0.16 : (tier==='catch' ? 0.3+Math.random()*0.13 : 0.2+Math.random()*0.1);
+  const dur = tier==='ambient' ? 0.4 : (tier==='final' ? 1.3 : (tier==='catch' ? 1.0 : 0.65));
+
+  if(!opts.chained){
+    state.jumpscareLock = (skipPrelude?0:preludeDur) + dur + ((tier==='catch'||tier==='final') ? 0.9 : 0.2);
+  }
+
+  function fire(){
+    const overlay = el('jumpscare');
+    overlay.style.setProperty('--jsdur', dur+'s');
+
+    let html = '';
+    if(tier!=='ambient'){
+      const svg = FACE_SVGS[Math.floor(Math.random()*FACE_SVGS.length)];
+      const jitterX = (Math.random()*2-1)*42, jitterY = (Math.random()*2-1)*28;
+      html += `<div class="jsFace" style="margin-left:${jitterX.toFixed(0)}px; margin-top:${jitterY.toFixed(0)}px;">${svg}</div><div class="scan"></div><div class="flashbulb"></div>`;
+      const sliceCount = tier==='final' ? 12 : (tier==='catch' ? 8 : 4);
+      for(let i=0;i<sliceCount;i++){
+        const top = Math.random()*100, h = 4+Math.random()*14, sx = (Math.random()<0.5?-1:1)*(6+Math.random()*26);
+        const delay = Math.random()*0.15;
+        html += `<div class="slice" style="top:${top}%; height:${h}%; --sx:${sx}px; animation-delay:${delay}s;"></div>`;
+      }
+    } else {
+      html += `<div class="jsFace" style="filter:brightness(0.6) drop-shadow(0 0 30px #600);">
+        <svg viewBox="0 0 200 200"><ellipse cx="100" cy="100" rx="55" ry="70" fill="#0a0606"/>
+        <circle cx="78" cy="95" r="4" fill="#b01818"/><circle cx="122" cy="95" r="4" fill="#b01818"/></svg>
+      </div>`;
+    }
+    overlay.innerHTML = html;
+    overlay.classList.remove('active');
+    void overlay.offsetWidth;
+    overlay.classList.add('active');
+
+    const stage = el('stage');
+    stage.classList.remove('shake','shakeBig');
+    void stage.offsetWidth;
+    stage.classList.add((tier==='catch'||tier==='final') ? 'shakeBig' : 'shake');
+
+    Audio_.jumpscareSting(tier);
+    setTimeout(()=>{ overlay.classList.remove('active'); }, dur*1000+40);
+
+    if(tier==='catch'||tier==='final'){ state.afterGlowT = 2.0; }
+
+    if(!opts.chained && (tier==='catch'||tier==='final') && Math.random()<0.25){
+      setTimeout(()=>{
+        if(state.screen==='playing' && !state.paused && !state.hiding && !state.journalOpen) triggerJumpscare(tier, {chained:true});
+      }, dur*1000 + 260 + Math.random()*180);
+    }
+  }
+
+  if(skipPrelude){
+    fire();
+  } else {
+    Audio_.preScareCue(tier);
+    const prelude = el('scarePrelude');
+    prelude.style.setProperty('--predur', preludeDur+'s');
+    prelude.classList.remove('active');
+    void prelude.offsetWidth;
+    prelude.classList.add('active');
+    setTimeout(()=>{ prelude.classList.remove('active'); fire(); }, preludeDur*1000);
+  }
+}
+
+/* =========================================================
+   HINT POPUP
+========================================================= */
+let hintTimer=null;
+function showHint(text, dur){
+  const h = el('hint'); h.textContent = text; h.classList.add('show');
+  if(hintTimer) clearTimeout(hintTimer);
+  hintTimer = setTimeout(()=> h.classList.remove('show'), dur||2200);
+}
+let roomPopupTimer=null;
+function showRoomName(name){
+  const p = el('roomPopup'); p.textContent = name; p.classList.add('show');
+  if(roomPopupTimer) clearTimeout(roomPopupTimer);
+  roomPopupTimer = setTimeout(()=> p.classList.remove('show'), 1800);
+}
+
+/* =========================================================
+   MOVEMENT / COLLISION
+========================================================= */
+function canStandAt(cx,cy,r){
+  const pts = [[cx-r,cy-r],[cx+r,cy-r],[cx-r,cy+r],[cx+r,cy+r]];
+  for(const [px,py] of pts){
+    const tx = Math.floor(px/TILE), ty = Math.floor(py/TILE);
+    if(isWallAt(tx,ty)) return false;
+  }
+  return true;
+}
+function moveEntity(ent, dx, dy){
+  if(dx!==0){
+    const nx = ent.x+dx;
+    if(canStandAt(nx,ent.y,ent.r)) ent.x = nx;
+  }
+  if(dy!==0){
+    const ny = ent.y+dy;
+    if(canStandAt(ent.x,ny,ent.r)) ent.y = ny;
+  }
+}
+/* =========================================================
+   UPDATE LOOP
+========================================================= */
+let lastTime = performance.now();
+const WALK_SPEED=130, SPRINT_SPEED=225, MONSTER_SPEED_BASE=56, MAX_HIDE_TIME=30;
+
+function difficultyMult(){
+  let speedMult = 1;
+  if(state.keysCollected>=1) speedMult=1.12;
+  if(state.keysCollected>=2) speedMult=1.26;
+  if(state.keysCollected>=3) speedMult=1.45;
+  if(state.nightmare) speedMult*=1.2;
+  return speedMult;
+}
+
+function update(dt){
+  if(state.screen!=='playing' || state.paused || state.journalOpen) return;
+
+  const c = state.character;
+  const p = state.player;
+  const m = state.monster;
+  state.elapsed += dt;
+
+  // jumpscare / invuln timers
+  if(state.jumpscareLock>0) state.jumpscareLock -= dt;
+  if(state.invuln>0) state.invuln -= dt;
+  if(state.abilityCooldown>0) state.abilityCooldown -= dt;
+  if(state.abilityActiveT>0) state.abilityActiveT -= dt;
+  if(state.afterGlowT>0) state.afterGlowT -= dt;
+
+  // ---- autosave ----
+  state.autosaveTimer -= dt;
+  if(state.autosaveTimer<=0){ state.autosaveTimer = 5; saveRunState(); }
+
+  // ---- hiding: find nearby spot, handle hidden state ----
+  state.nearHideSpot = null;
+  if(!state.hiding){
+    for(const h of HIDESPOTS){
+      if(Math.hypot(p.x-h.x,p.y-h.y)<30){ state.nearHideSpot = h; break; }
+    }
+    if(state.nearHideSpot) showHint('Press E to hide', 900);
+  }
+
+  if(state.hiding){
+    // frozen in place; monster cannot detect or catch the player at all
+    state.hideTimer -= dt;
+    if(state.hideTimer<=0){
+      state.hiding = false;
+      el('hideOverlay').classList.remove('on');
+      showHint("You can't stay hidden any longer...", 2200);
+    } else {
+      if(state.hideTimer<=8){
+        el('hideOverlay').querySelector('.label').textContent = `HIDING — forced out in ${Math.ceil(state.hideTimer)}s`;
+      } else {
+        el('hideOverlay').querySelector('.label').textContent = 'HIDING — press E to come out';
+      }
+      updateMonster(m,p,dt,c,true);
+      const distHidden = Math.hypot(p.x-m.x,p.y-m.y);
+      if(distHidden<300 && state.hearts>0){ Audio_.startHeartbeat(Math.max(0,1-distHidden/300)); } else { Audio_.stopHeartbeat(); }
+      el('fearPulse').classList.toggle('on', distHidden<120 || state.afterGlowT>0);
+      updateHUD();
+      return;
+    }
+  }
+
+  // ---- player movement (first-person: mouse/arrows turn, WASD move+strafe) ----
+  const K = state.keys;
+  const TURN_SPEED = 2.6;
+  if(K.has('ArrowLeft')) p.angle -= TURN_SPEED*dt;
+  if(K.has('ArrowRight')) p.angle += TURN_SPEED*dt;
+
+  let fwd=0, strafe=0;
+  if(K.has('KeyW')||K.has('ArrowUp')) fwd+=1;
+  if(K.has('KeyS')||K.has('ArrowDown')) fwd-=1;
+  if(K.has('KeyA')) strafe-=1;
+  if(K.has('KeyD')) strafe+=1;
+  const moving = (fwd!==0||strafe!==0);
+  let sprinting = false;
+  if(moving){
+    const len = Math.hypot(fwd,strafe); fwd/=len; strafe/=len;
+    sprinting = (K.has('ShiftLeft')||K.has('ShiftRight')) && state.stamina>2;
+    const spd = (sprinting?SPRINT_SPEED:WALK_SPEED) * c.speedMult * (state.cheats.superSpeed?2.2:1);
+    const fx = Math.cos(p.angle), fy = Math.sin(p.angle);
+    const sx = Math.cos(p.angle+Math.PI/2), sy = Math.sin(p.angle+Math.PI/2);
+    const mx = (fx*fwd + sx*strafe) * spd*dt;
+    const my = (fy*fwd + sy*strafe) * spd*dt;
+    if(state.cheats.noclip){ p.x += mx; p.y += my; }
+    else { moveEntity(p, mx, my); }
+  }
+  if(sprinting){ state.stamina = Math.max(0,state.stamina-38*dt); }
+  else { state.stamina = Math.min(100,state.stamina+16*dt); }
+
+  // footsteps
+  if(moving){
+    state.lastStepT -= dt;
+    if(state.lastStepT<=0){ Audio_.footstep(); state.lastStepT = sprinting?0.22:0.38; }
+  }
+
+  // ---- flashlight battery ----
+  if(state.cheats.infiniteBattery){
+    state.battery = 100; state.stamina = 100;
+  } else if(state.flashlightOn){
+    state.battery = Math.max(0, state.battery - 6*c.battMult*dt);
+    if(state.battery<=0) state.flashlightOn=false;
+  } else {
+    state.battery = Math.min(100, state.battery + 2.2*dt);
+  }
+
+  // ---- room tracking / scares ----
+  const rid = roomIdAtPx(p.x,p.y);
+  if(rid>=0 && rid!==state.lastRoomId){
+    const room = ROOMS[rid];
+    showRoomName(room.name.toUpperCase());
+    state.lastRoomId = rid;
+    state.visitedRooms[rid] = true;
+    const scareKey = SCARE_ROOMS[room.name];
+    if(scareKey && !state.scaredRooms[scareKey]){
+      state.scaredRooms[scareKey] = true;
+      setTimeout(()=>{ if(state.screen==='playing' && !state.paused && !state.hiding && !state.journalOpen) triggerJumpscare('scripted'); }, 450);
+    }
+  }
+
+  // ---- item pickups ----
+  KEYS.forEach(k=>{
+    if(!k.taken && Math.hypot(p.x-k.x,p.y-k.y)<22){
+      k.taken=true; state.keysCollected++;
+      Audio_.keyChime();
+      showHint(`You take the key. (${state.keysCollected}/3 keys)`, 2400);
+      saveRunState();
+      if(state.keysCollected>=3 && !state.hunted){
+        state.hunted = true;
+        setTimeout(()=>{
+          if(state.screen==='playing' && !state.paused && !state.journalOpen){
+            showHint("Something changed. She knows you have them now.", 3400);
+            triggerJumpscare('final');
+          }
+        }, 700);
+      }
+    }
+  });
+  NOTES.forEach(n=>{
+    if(!n.taken && Math.hypot(p.x-n.x,p.y-n.y)<22){
+      n.taken=true; state.notesCollected++;
+      Audio_.pickupChime();
+      showHint(`Found: "${n.title}" — press J to read your journal.`, 3200);
+      saveRunState();
+    }
+  });
+  STUNITEMS.forEach(s=>{
+    if(!s.taken && Math.hypot(p.x-s.x,p.y-s.y)<22){
+      s.taken=true;
+      const firstTime = !state.hasStunGun;
+      state.hasStunGun = true;
+      state.stunCharges++;
+      Audio_.pickupChime();
+      showHint(firstTime
+        ? `You found a stun gun! (${state.stunCharges} dart${state.stunCharges>1?'s':''}) Aim at her and left-click or hold R.`
+        : `Tranquilizer dart picked up. (${state.stunCharges} total)`, 3600);
+      saveRunState();
+    }
+  });
+
+  // ---- exit check ----
+  if(Math.hypot(p.x-EXIT_PX.x,p.y-EXIT_PX.y)<22){
+    if(state.keysCollected>=3){ winGame(); return; }
+    else { showHint("The door is sealed shut. You need all 3 keys.", 2000); }
+  }
+
+  // ---- monster AI ----
+  if(!state.cheats.freezeMonster) updateMonster(m,p,dt,c,false);
+
+  // ---- fear meter ----
+  const distToMonster = Math.hypot(p.x-m.x,p.y-m.y);
+  const inDanger = distToMonster<260 || state.hunted;
+  state.fear = Math.max(0, Math.min(1, state.fear + ( (inDanger? 0.35 : -0.25) * dt ) ));
+  Audio_.setDroneIntensity(state.fear);
+  if(distToMonster<380 && state.hearts>0){ Audio_.startHeartbeat(Math.max(0,1-distToMonster/380)); } else { Audio_.stopHeartbeat(); }
+
+  // ---- monster growl: dread cue when she's closing in ----
+  state.growlCooldown -= dt;
+  if(distToMonster<340 && state.growlCooldown<=0 && !state.hiding){
+    state.growlCooldown = 7 + Math.random()*6;
+    Audio_.monsterGrowl();
+  }
+  el('fearPulse').classList.toggle('on', state.fear>0.55 || state.afterGlowT>0);
+
+  // ---- ambient jumpscares ----
+  state.ambientTimer -= dt;
+  if(state.ambientTimer<=0){
+    state.ambientTimer = (state.hunted ? 16 : 26) + Math.random()*22;
+    if(state.jumpscareLock<=0 && m.mode!=='chase'){
+      triggerJumpscare('ambient');
+    }
+  }
+
+  // ---- ambient atmosphere sounds (no jumpscare, just dread) ----
+  state.ambientSoundTimer -= dt;
+  if(state.ambientSoundTimer<=0){
+    state.ambientSoundTimer = 10 + Math.random()*14;
+    const roll = Math.random();
+    if(roll<0.4) Audio_.distantBang();
+    else if(roll<0.75) Audio_.distantWhisper();
+    else Audio_.doorCreak();
+  }
+
+  // ---- catch ----
+  if(state.invuln<=0 && m.mode!=='defeated' && distToMonster < (p.r+m.r+2)){
+    onCaught();
+  }
+
+  // ---- dev-mode-only weapons ----
+  updateWeapon(dt);
+
+  updateHUD();
+}
+
+function tryWeaponHit(w){
+  const p = state.player, m = state.monster;
+  if(m.mode==='defeated') return false;
+  const dx=m.x-p.x, dy=m.y-p.y;
+  const dist = Math.hypot(dx,dy);
+  if(dist>w.range) return false;
+  let rel = Math.atan2(dy,dx)-p.angle;
+  while(rel>Math.PI) rel-=Math.PI*2;
+  while(rel<-Math.PI) rel+=Math.PI*2;
+  if(Math.abs(rel)>w.tol) return false;
+  const col = Math.max(0,Math.min(NUM_RAYS-1, Math.floor(NUM_RAYS*(rel/FOV+0.5))));
+  if(dist>=zbuffer[col]) return false;
+  return true;
+}
+
+function defeatMonster(){
+  const m = state.monster;
+  m.mode='defeated';
+  m.defeatedT = 16;
+  m.health = 0;
+  Audio_.monsterDefeated();
+  showHint('The Matron is destroyed... for now.', 2800);
+}
+
+function fireWeapon(weaponId){
+  const w = WEAPONS[weaponId];
+  if(!w) return;
+  const m = state.monster;
+  const power = Math.min(1, w.damage/150);
+  const hit = tryWeaponHit(w);
+  state.muzzleFlashT = 0.12;
+  state.weaponKickT = 0.18;
+  Audio_.weaponFire(w.style, power, hit);
+  if(hit){
+    if(w.stun){ m.mode='retreat'; m.retreatT = Math.max(m.retreatT||0, 6); }
+    if(w.damage>0){
+      m.health = Math.max(0, (m.health??100) - w.damage);
+      showHint(`Hit! (${Math.max(0,m.health)} HP)`, 900);
+      if(m.health<=0) defeatMonster();
+    }
+  }
+}
+
+const STUN_GUN = {range:460, tol:0.13};
+
+function fireStunGun(){
+  state.stunGunCooldown = 1.1;
+  state.stunCharges--;
+  state.muzzleFlashT = 0.12;
+  state.weaponKickT = 0.18;
+  const hit = tryWeaponHit(STUN_GUN);
+  Audio_.weaponFire('hitscan', 0.35, hit);
+  if(hit && state.monster.mode!=='defeated'){
+    state.monster.mode='retreat';
+    state.monster.retreatT = 5;
+    showHint('Tranquilizer hit — she staggers back, stunned!', 2600);
+  } else {
+    showHint('Missed...', 1200);
+  }
+  saveRunState();
+}
+
+function updateWeapon(dt){
+  if(state.weaponCooldown>0) state.weaponCooldown -= dt;
+  if(state.weaponKickT>0) state.weaponKickT -= dt;
+  if(state.muzzleFlashT>0) state.muzzleFlashT -= dt;
+  if(state.stunGunCooldown>0) state.stunGunCooldown -= dt;
+
+  const firing = state.firing || state.keys.has('KeyR');
+  const weaponId = state.cheats.weapon;
+
+  if(weaponId && weaponId!=='none'){
+    const w = WEAPONS[weaponId];
+    if(!w || !firing) return;
+    if(w.style==='continuous'){
+      state.weaponTick -= dt;
+      if(state.weaponTick<=0){ state.weaponTick = w.tick; fireWeapon(weaponId); }
+    } else if(state.weaponCooldown<=0){
+      state.weaponCooldown = w.cooldown;
+      fireWeapon(weaponId);
+    }
+    return;
+  }
+
+  // the player's own found weapon — available in normal play, no dev mode needed
+  if(!firing || !state.hasStunGun || state.stunGunCooldown>0) return;
+  if(state.stunCharges<=0){
+    state.stunGunCooldown = 0.5;
+    showHint("Out of tranquilizer darts.", 1400);
+    return;
+  }
+  fireStunGun();
+}
+
+function bfsPath(sx,sy,tx,ty){
+  if(sx===tx && sy===ty) return [];
+  if(isWallAt(sx,sy) || isWallAt(tx,ty)) return null;
+  const idx = (x,y)=>y*MAPW+x;
+  const visited = new Uint8Array(MAPW*MAPH);
+  const prev = new Int32Array(MAPW*MAPH).fill(-1);
+  const qx = new Int32Array(MAPW*MAPH), qy = new Int32Array(MAPW*MAPH);
+  let qHead=0, qTail=0;
+  qx[qTail]=sx; qy[qTail]=sy; qTail++;
+  visited[idx(sx,sy)] = 1;
+  let found = false;
+  while(qHead<qTail){
+    const cx=qx[qHead], cy=qy[qHead]; qHead++;
+    if(cx===tx && cy===ty){ found=true; break; }
+    const nbrs = [[cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]];
+    for(const [nx,ny] of nbrs){
+      if(nx<0||ny<0||nx>=MAPW||ny>=MAPH) continue;
+      if(isWallAt(nx,ny)) continue;
+      const k = idx(nx,ny);
+      if(visited[k]) continue;
+      visited[k]=1; prev[k]=idx(cx,cy);
+      qx[qTail]=nx; qy[qTail]=ny; qTail++;
+    }
+  }
+  if(!found) return null;
+  const path = [];
+  let curKey = idx(tx,ty);
+  const startKey = idx(sx,sy);
+  while(curKey !== startKey){
+    path.push([curKey%MAPW, Math.floor(curKey/MAPW)]);
+    curKey = prev[curKey];
+    if(curKey===-1) return null;
+  }
+  path.reverse();
+  return path;
+}
+
+function updateMonster(m,p,dt,c,hidden){
+  if(m.mode==='defeated'){
+    m.defeatedT -= dt;
+    if(m.defeatedT<=0){
+      m.mode='chase'; m.health=100;
+      m.x = MONSTER_WAYPOINTS[0].x; m.y = MONSTER_WAYPOINTS[0].y;
+      m.path=null; m.pathRecalcT=0;
+      if(state.screen==='playing') showHint('...she is back.', 2400);
+    }
+    return;
+  }
+
+  // She is always coming. Slow, relentless, never stops — unless you're hidden,
+  // in which case she heads for where she last saw you and waits there.
+  const speed = MONSTER_SPEED_BASE * difficultyMult() * (state.cheats.monsterSpeedMult||1);
+
+  if(m.mode==='retreat'){
+    m.retreatT -= dt;
+    const away = Math.atan2(m.y-p.y, m.x-p.x);
+    moveEntity(m, Math.cos(away)*speed*dt, Math.sin(away)*speed*dt);
+    if(m.retreatT<=0) m.mode='chase';
+    return;
+  }
+
+  let targetX, targetY;
+  if(hidden){
+    if(m.lastKnownX===undefined){ m.lastKnownX=p.x; m.lastKnownY=p.y; }
+    targetX = m.lastKnownX; targetY = m.lastKnownY;
+    if(Math.hypot(m.x-targetX,m.y-targetY) < 24) return; // waiting nearby
+  } else {
+    m.lastKnownX = p.x; m.lastKnownY = p.y;
+    targetX = p.x; targetY = p.y;
+  }
+
+  // route through the corridor grid so she never gets wedged against a wall
+  const targetTileX = Math.floor(targetX/TILE), targetTileY = Math.floor(targetY/TILE);
+  m.pathRecalcT = (m.pathRecalcT||0) - dt;
+  if(m.pathRecalcT<=0 || !m.path || m.pathTargetX!==targetTileX || m.pathTargetY!==targetTileY){
+    m.pathRecalcT = 0.5 + Math.random()*0.2;
+    m.path = bfsPath(Math.floor(m.x/TILE), Math.floor(m.y/TILE), targetTileX, targetTileY) || [];
+    m.pathIndex = 0;
+    m.pathTargetX = targetTileX; m.pathTargetY = targetTileY;
+  }
+
+  let aimX=targetX, aimY=targetY;
+  if(m.path && m.path.length>0){
+    while(m.pathIndex < m.path.length-1){
+      const [nx,ny] = m.path[m.pathIndex];
+      const cx = nx*TILE+TILE/2, cy = ny*TILE+TILE/2;
+      if(Math.hypot(m.x-cx,m.y-cy) < 16) m.pathIndex++;
+      else break;
+    }
+    const [nx,ny] = m.path[Math.min(m.pathIndex,m.path.length-1)];
+    aimX = nx*TILE+TILE/2; aimY = ny*TILE+TILE/2;
+  }
+
+  const ang = Math.atan2(aimY-m.y, aimX-m.x);
+  const stepX = Math.cos(ang)*speed*dt, stepY = Math.sin(ang)*speed*dt;
+  const prevX=m.x, prevY=m.y;
+  moveEntity(m, stepX, stepY);
+
+  // anti-stuck: if barely moved, try a perpendicular nudge and force a path recalc
+  if(Math.hypot(m.x-prevX,m.y-prevY) < 0.5){
+    m.stuckT = (m.stuckT||0) + dt;
+    if(m.stuckT>0.4){
+      const perp = ang + (Math.random()<0.5?1:-1)*Math.PI/2;
+      moveEntity(m, Math.cos(perp)*speed*dt, Math.sin(perp)*speed*dt);
+      m.stuckT=0;
+      m.pathRecalcT=0;
+    }
+  } else { m.stuckT=0; }
+}
+function onCaught(){
+  const m = state.monster, p = state.player;
+  const a = Math.atan2(p.y-m.y, p.x-m.x);
+  moveEntity(p, Math.cos(a)*70, Math.sin(a)*70);
+  m.mode='retreat'; m.retreatT=4.5;
+  state.invuln = 2.2;
+  if(state.cheats.god){
+    triggerJumpscare('catch');
+    showHint('God Mode — no damage taken.', 2000);
+    return;
+  }
+  state.hearts--;
+  triggerJumpscare((state.hearts<=0 || state.hunted) ? 'final' : 'catch');
+  if(state.hearts<=0){ setTimeout(loseGame, 650); }
+  else { showHint(`You got away... barely. (${state.hearts} heart${state.hearts>1?'s':''} left)`, 2600); }
+}
+
+function winGame(){
+  state.screen='win';
+  clearRunState();
+  Audio_.stopDrone(); Audio_.stopHeartbeat(); Audio_.winChime();
+  el('winText').textContent = state.character.win;
+  const isBest = saveBestTimeIfBetter(state.elapsed);
+  const unlocked = [];
+  if(unlockSkin('crimson')) unlocked.push('Crimson Ward');
+  if(state.nightmare && unlockSkin('spectral')) unlocked.push('Spectral Blue');
+  if(state.notesCollected>=NOTES.length && unlockSkin('gold')) unlocked.push('Gilded');
+  let stats = `Survived ${formatTime(state.elapsed)} · ${state.notesCollected}/${NOTES.length} pages found`;
+  if(isBest) stats += '  —  NEW BEST TIME';
+  if(unlocked.length) stats += `\nNew skin unlocked: ${unlocked.join(', ')} (see Settings)`;
+  el('winStats').textContent = stats;
+  show('winScreen');
+  el('hud').classList.add('hidden');
+}
+function loseGame(){
+  state.screen='gameover';
+  clearRunState();
+  Audio_.stopDrone(); Audio_.stopHeartbeat(); Audio_.loseSting();
+  el('gameoverText').textContent = state.character.lose;
+  show('gameoverScreen');
+  el('hud').classList.add('hidden');
+}
+
+function updateHUD(){
+  el('hearts').innerHTML = '<span>'+('♥ '.repeat(state.hearts)).trim()+'</span>' +
+    '<span style="color:#432">'+('♥ '.repeat(Math.max(0,state.character.maxHearts-state.hearts))).trim()+'</span>';
+  el('batteryBar').firstElementChild.style.width = state.battery+'%';
+  el('staminaBar').firstElementChild.style.width = state.stamina+'%';
+  el('keysLine').textContent = `KEYS: ${state.keysCollected} / 3`;
+  if(state.hasStunGun){
+    el('stunLine').classList.remove('hidden');
+    el('stunLine').textContent = `STUN GUN: ${state.stunCharges} dart${state.stunCharges===1?'':'s'}`;
+  } else {
+    el('stunLine').classList.add('hidden');
+  }
+  if(state.character.intuition){
+    el('abilityLine').textContent = state.abilityCooldown>0
+      ? `Intuition: recharging (${state.abilityCooldown.toFixed(0)}s)`
+      : `Intuition: ready [Q]`;
+  } else {
+    el('abilityLine').textContent = '';
+  }
+}
+
+/* =========================================================
+   RENDER — raycasting first-person engine
+========================================================= */
+const canvas = el('game'), ctx = canvas.getContext('2d');
+const SCREEN_W = 960, SCREEN_H = 640;
+const FOV = 1.15;
+const NUM_RAYS = 320;
+const STRIP_W = SCREEN_W / NUM_RAYS;
+const PROJ_DIST = (SCREEN_W/2) / Math.tan(FOV/2);
+const zbuffer = new Float32Array(NUM_RAYS);
+
+function castRay(px, py, angle){
+  const posX = px/TILE, posY = py/TILE;
+  const dirX = Math.cos(angle), dirY = Math.sin(angle);
+  let mapX = Math.floor(posX), mapY = Math.floor(posY);
+  const deltaDistX = (dirX===0) ? 1e30 : Math.abs(1/dirX);
+  const deltaDistY = (dirY===0) ? 1e30 : Math.abs(1/dirY);
+  let stepX, stepY, sideDistX, sideDistY;
+  if(dirX<0){ stepX=-1; sideDistX=(posX-mapX)*deltaDistX; } else { stepX=1; sideDistX=(mapX+1-posX)*deltaDistX; }
+  if(dirY<0){ stepY=-1; sideDistY=(posY-mapY)*deltaDistY; } else { stepY=1; sideDistY=(mapY+1-posY)*deltaDistY; }
+  let side=0;
+  for(let i=0;i<56;i++){
+    if(sideDistX<sideDistY){ sideDistX+=deltaDistX; mapX+=stepX; side=0; }
+    else { sideDistY+=deltaDistY; mapY+=stepY; side=1; }
+    if(isWallAt(mapX,mapY)){
+      const perp = side===0 ? (sideDistX-deltaDistX) : (sideDistY-deltaDistY);
+      let wallX = side===0 ? (posY + perp*dirY) : (posX + perp*dirX);
+      wallX -= Math.floor(wallX);
+      return {dist: Math.max(0.0001,perp)*TILE, side, wallX};
+    }
+  }
+  return {dist: 56*TILE, side:0, wallX:0};
+}
+
+function hexToRgb(hex){
+  return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
+}
+
+function renderWorld(){
+  const p = state.player;
+
+  const skyGrad = ctx.createLinearGradient(0,0,0,SCREEN_H/2);
+  skyGrad.addColorStop(0,'#0a0708'); skyGrad.addColorStop(1,'#1a1210');
+  ctx.fillStyle = skyGrad; ctx.fillRect(0,0,SCREEN_W,SCREEN_H/2);
+  const floorGrad = ctx.createLinearGradient(0,SCREEN_H/2,0,SCREEN_H);
+  floorGrad.addColorStop(0,'#1c130f'); floorGrad.addColorStop(1,'#060403');
+  ctx.fillStyle = floorGrad; ctx.fillRect(0,SCREEN_H/2,SCREEN_W,SCREEN_H/2);
+
+  const flicker = 1 - (Math.sin(performance.now()/231)*0.025 + Math.sin(performance.now()/97)*0.02);
+  const ambientDist = 4.3*TILE*flicker;
+  const flashOn = state.flashlightOn;
+  const flashDist = flashOn ? (10.8 + (state.fear>0.6 ? Math.sin(performance.now()/60)*0.3 : 0))*TILE*flicker : 0;
+  const maxVisible = Math.max(ambientDist, flashDist);
+  const skinRgb = hexToRgb(getSelectedSkin().color);
+
+  const BRICK_ROWS = 5, BRICK_COLS = 6;
+  for(let i=0;i<NUM_RAYS;i++){
+    const rayAngle = p.angle - FOV/2 + (i/NUM_RAYS)*FOV;
+    const {dist, side, wallX} = castRay(p.x,p.y,rayAngle);
+    const corrected = dist * Math.cos(rayAngle - p.angle);
+    zbuffer[i] = corrected;
+
+    let lineH = (TILE/corrected) * PROJ_DIST;
+    if(lineH > SCREEN_H*3) lineH = SCREEN_H*3;
+    const drawStart = SCREEN_H/2 - lineH/2;
+
+    let bright = 1 - Math.min(1, corrected/ambientDist);
+    if(flashDist>0){ bright = Math.max(bright, (1-Math.min(1,corrected/flashDist))*0.95); }
+    bright = Math.max(0, Math.min(1, bright));
+    if(corrected > maxVisible) bright = 0.07; // faint outline instead of a hard void
+
+    const baseShade = side===1 ? 0.68 : 1.0;
+    const wallTileX = Math.floor((p.x+Math.cos(rayAngle)*dist)/TILE), wallTileY=Math.floor((p.y+Math.sin(rayAngle)*dist)/TILE);
+    const tileParity = ((wallTileX+wallTileY)%2)===0;
+    let baseR = tileParity?48:42, baseG = tileParity?42:38, baseB = tileParity?54:48;
+
+    const x0 = Math.floor(i*STRIP_W), colW = Math.ceil(STRIP_W)+1;
+    const brickCol = Math.floor(wallX*BRICK_COLS*2); // *2 so odd rows can half-offset
+    const mortarX = (wallX*BRICK_COLS*2) % 1;
+    const nearMortarV = mortarX<0.09 || mortarX>0.91;
+
+    for(let seg=0; seg<BRICK_ROWS; seg++){
+      const segY0 = drawStart + seg*(lineH/BRICK_ROWS);
+      const segH = lineH/BRICK_ROWS;
+      const rowOffset = seg%2===0 ? 0 : 1;
+      const brickOn = ((brickCol+rowOffset)%2)===0;
+      let r=baseR, g=baseG, b=baseB;
+      if(brickOn){ r*=0.84; g*=0.84; b*=0.84; }
+      if(nearMortarV){ r*=0.55; g*=0.55; b*=0.55; }
+      r*=baseShade; g*=baseShade; b*=baseShade;
+
+      if(flashOn && bright>0){
+        const tintAmt = bright*0.3;
+        r = r*(1-tintAmt) + skinRgb[0]*tintAmt*0.6;
+        g = g*(1-tintAmt) + skinRgb[1]*tintAmt*0.6;
+        b = b*(1-tintAmt) + skinRgb[2]*tintAmt*0.6;
+      }
+      r*=bright; g*=bright; b*=bright;
+
+      ctx.fillStyle = `rgb(${r|0},${g|0},${b|0})`;
+      ctx.fillRect(x0, Math.floor(segY0), colW, Math.ceil(segH)+1);
+    }
+    // horizontal mortar lines between rows
+    if(bright>0.04){
+      ctx.fillStyle = `rgba(0,0,0,${0.35*bright})`;
+      for(let seg=1; seg<BRICK_ROWS; seg++){
+        ctx.fillRect(x0, Math.floor(drawStart + seg*(lineH/BRICK_ROWS)), colW, 1);
+      }
+    }
+  }
+}
+
+function spriteScreenPos(sx, sy){
+  const p = state.player;
+  const dx = sx-p.x, dy = sy-p.y;
+  const dist = Math.hypot(dx,dy);
+  let rel = Math.atan2(dy,dx) - p.angle;
+  while(rel>Math.PI) rel -= Math.PI*2;
+  while(rel<-Math.PI) rel += Math.PI*2;
+  const screenX = (rel/FOV + 0.5) * SCREEN_W;
+  return {dist, rel, screenX};
+}
+
+function drawKeySprite(scale){
+  ctx.scale(scale,scale);
+  ctx.shadowColor='#e8d35a'; ctx.shadowBlur=10;
+  ctx.fillStyle='#e8d35a';
+  ctx.beginPath(); ctx.arc(-6,0,6,0,Math.PI*2); ctx.fill();
+  ctx.fillRect(-1,-2,14,4); ctx.fillRect(8,-2,3,6); ctx.fillRect(12,-2,3,8);
+}
+function drawStunItemSprite(scale){
+  ctx.scale(scale,scale);
+  ctx.shadowColor='#5ec7d9'; ctx.shadowBlur=11;
+  ctx.fillStyle='#3a3a3a';
+  ctx.fillRect(-9,-2,14,5);
+  ctx.fillRect(-3,2,6,7);
+  ctx.fillStyle='#5ec7d9';
+  ctx.fillRect(5,-3,4,7);
+}
+function drawNoteSprite(scale){
+  ctx.scale(scale,scale);
+  ctx.shadowColor='#cfc6b8'; ctx.shadowBlur=8;
+  ctx.fillStyle='#d8d2c0'; ctx.fillRect(-7,-9,14,18);
+  ctx.strokeStyle='#8a1414'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(-4,-4); ctx.lineTo(4,-4); ctx.moveTo(-4,0); ctx.lineTo(4,0); ctx.moveTo(-4,4); ctx.lineTo(1,4);
+  ctx.stroke();
+}
+function drawHideSprite(scale, near){
+  ctx.scale(scale,scale);
+  if(near){ ctx.shadowColor='#c5281e'; ctx.shadowBlur=14; }
+  ctx.fillStyle='#2a1c10'; ctx.fillRect(-11,-16,22,32);
+  ctx.strokeStyle = near ? '#c5281e' : '#55402a'; ctx.lineWidth=2; ctx.strokeRect(-11,-16,22,32);
+  ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(0,16); ctx.stroke();
+  ctx.fillStyle = near ? '#e8d35a' : '#443020';
+  ctx.beginPath(); ctx.arc(-4,0,1.6,0,Math.PI*2); ctx.arc(4,0,1.6,0,Math.PI*2); ctx.fill();
+}
+function drawExitSprite(scale){
+  ctx.scale(scale,scale);
+  const ready = state.keysCollected>=3;
+  const pulse = 0.5+0.5*Math.sin(performance.now()/300);
+  ctx.shadowColor = ready ? '#78dc78' : '#dc5050'; ctx.shadowBlur = 20;
+  ctx.fillStyle = ready ? `rgba(120,220,120,${0.55+0.3*pulse})` : `rgba(220,80,60,${0.4+0.25*pulse})`;
+  ctx.fillRect(-14,-24,28,48);
+  ctx.strokeStyle = ready ? '#bfe8bf' : '#e8bfbf'; ctx.lineWidth=2; ctx.strokeRect(-14,-24,28,48);
+}
+function drawMonsterSprite(scale, proximity){
+  ctx.scale(scale,scale);
+  const r = 18;
+  const bodyAlpha = 0.32 + proximity*0.68;
+
+  // long clawed, twitching limbs
+  ctx.globalAlpha = bodyAlpha;
+  ctx.strokeStyle = `rgb(${40+proximity*35|0},10,10)`; ctx.lineWidth = 3;
+  for(const side of [-1,1]){
+    const jitter = (Math.random()-0.5)*3;
+    const swing = Math.sin(performance.now()/110 + side*2)*9 + jitter;
+    ctx.beginPath(); ctx.moveTo(side*r*0.55, 4);
+    ctx.lineTo(side*(r+15), 15+swing);
+    ctx.lineTo(side*(r+24), 5+swing);
+    ctx.lineTo(side*(r+29), 12+swing);
+    ctx.stroke();
+  }
+
+  // gaunt, jagged elongated silhouette
+  ctx.fillStyle = `rgb(${18+proximity*26|0},${6+proximity*7|0},${10+proximity*9|0})`;
+  ctx.beginPath(); ctx.moveTo(0,-r-11);
+  for(let i=0;i<14;i++){
+    const ang = (i/14)*Math.PI*2;
+    const jag = Math.sin(ang*6+performance.now()/140)*2.5;
+    const widen = (ang>Math.PI*0.35 && ang<Math.PI*1.65) ? 5 : 0;
+    const rad = r + jag + widen;
+    ctx.lineTo(Math.cos(ang)*rad, Math.sin(ang)*rad*1.18);
+  }
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = `rgba(100,10,10,${bodyAlpha*0.85})`; ctx.lineWidth=1.5; ctx.stroke();
+
+  // gaping jagged mouth — only resolves into view up close
+  if(proximity>0.28){
+    ctx.globalAlpha = Math.min(1,(proximity-0.28)/0.5);
+    ctx.fillStyle = '#050000';
+    ctx.beginPath(); ctx.ellipse(0,7,6.5,10,0,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#eee'; ctx.lineWidth=1.3;
+    ctx.beginPath();
+    ctx.moveTo(-6.5,1); ctx.lineTo(-3.5,9); ctx.lineTo(-0.8,1);
+    ctx.lineTo(0.8,9); ctx.lineTo(3.5,1); ctx.lineTo(6.5,9);
+    ctx.stroke();
+  }
+
+  // eyes — pierce the dark at ANY distance, this is how you first see her coming
+  ctx.globalAlpha = 1;
+  const pulse = 0.82+0.18*Math.sin(performance.now()/170);
+  ctx.shadowColor = '#ff1414'; ctx.shadowBlur = 15+proximity*16;
+  ctx.fillStyle = `rgba(255,${(18+34*(1-proximity))|0},20,${pulse})`;
+  const eyeR = 2.8 + proximity*2.4;
+  ctx.beginPath(); ctx.arc(-6.5,-4,eyeR,0,Math.PI*2); ctx.arc(6.5,-4,eyeR,0,Math.PI*2); ctx.fill();
+}
+
+function renderSprites(){
+  const p = state.player;
+  const list = [];
+  const monsterDist = Math.hypot(state.monster.x-p.x, state.monster.y-p.y);
+  const proximity = Math.max(0, Math.min(1, 1 - monsterDist/420));
+  if(state.monster.mode!=='defeated'){
+    list.push({x:state.monster.x, y:state.monster.y, type:'monster', size: 38+proximity*16, proximity});
+  }
+  KEYS.forEach(k=>{ if(!k.taken) list.push({x:k.x,y:k.y,type:'key', size:26}); });
+  STUNITEMS.forEach(s=>{ if(!s.taken) list.push({x:s.x,y:s.y,type:'stunitem', size:24}); });
+  NOTES.forEach(n=>{ if(!n.taken) list.push({x:n.x,y:n.y,type:'note', size:22}); });
+  HIDESPOTS.forEach(h=>{ list.push({x:h.x,y:h.y,type:'hide', size:40, near:state.nearHideSpot===h}); });
+  const frontHallIdx = ROOMS.findIndex(r=>r.name==='Front Hall');
+  if(state.visitedRooms[frontHallIdx] || state.keysCollected>=3){
+    list.push({x:EXIT_PX.x,y:EXIT_PX.y,type:'exit', size:54});
+  }
+
+  list.forEach(o=>{ const sp = spriteScreenPos(o.x,o.y); o.dist=sp.dist; o.rel=sp.rel; o.screenX=sp.screenX; });
+  list.sort((a,b)=>b.dist-a.dist);
+
+  list.forEach(o=>{
+    if(o.dist<2) return;
+    if(Math.abs(o.rel) > FOV/2+0.4) return;
+    const col = Math.max(0, Math.min(NUM_RAYS-1, Math.floor(NUM_RAYS*(o.rel/FOV+0.5))));
+    const xrayThis = o.type==='monster' && state.cheats.xray;
+    if(!xrayThis && o.dist >= zbuffer[col]) return;
+
+    const h = Math.min(SCREEN_H*0.85, (o.size/o.dist)*PROJ_DIST);
+    const scale = h/32;
+    ctx.save();
+    ctx.translate(o.screenX, SCREEN_H/2);
+    if(o.type==='key') drawKeySprite(scale);
+    else if(o.type==='note') drawNoteSprite(scale);
+    else if(o.type==='stunitem') drawStunItemSprite(scale);
+    else if(o.type==='hide') drawHideSprite(scale, o.near);
+    else if(o.type==='exit') drawExitSprite(scale);
+    else if(o.type==='monster') drawMonsterSprite(scale, o.proximity);
+    ctx.restore();
+  });
+}
+
+function drawIntuitionCompass(){
+  if(!(state.character.intuition && state.abilityActiveT>0)) return;
+  const p=state.player, m=state.monster;
+  const rel = Math.atan2(m.y-p.y, m.x-p.x) - p.angle;
+  ctx.save();
+  ctx.translate(SCREEN_W/2, SCREEN_H-70);
+  ctx.rotate(rel);
+  ctx.globalAlpha = Math.min(1,state.abilityActiveT);
+  ctx.fillStyle='#8a1414';
+  ctx.beginPath(); ctx.moveTo(18,0); ctx.lineTo(-8,-9); ctx.lineTo(-8,9); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+function drawViewmodel(){
+  if(!state.flashlightOn || state.hiding) return;
+  const skin = getSelectedSkin();
+  const bob = Math.sin(performance.now()/180)*3;
+  ctx.save();
+  ctx.translate(SCREEN_W-120, SCREEN_H-20+bob);
+  ctx.fillStyle = '#2a2016';
+  ctx.fillRect(-16,-90,32,90);
+  ctx.fillStyle = skin.color;
+  ctx.shadowColor = skin.color; ctx.shadowBlur = 18;
+  ctx.beginPath(); ctx.arc(0,-96,16,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function drawWeaponViewmodel(){
+  const weaponId = state.cheats.weapon;
+  if(!weaponId || weaponId==='none' || state.hiding) return;
+  const w = WEAPONS[weaponId];
+  if(!w) return;
+  const kick = state.weaponKickT>0 ? (state.weaponKickT/0.18)*14 : 0;
+  const bob = Math.sin(performance.now()/220)*4;
+  ctx.save();
+  ctx.translate(SCREEN_W/2, SCREEN_H-14+bob+kick);
+  ctx.fillStyle = '#1a1512';
+  const bodyW = w.big ? 64 : (w.style==='melee'?26:40);
+  ctx.fillRect(-bodyW/2,-110,bodyW,110);
+  ctx.fillStyle = w.color;
+  ctx.shadowColor = w.color; ctx.shadowBlur = 10;
+  if(w.style==='melee'){ ctx.fillRect(-4,-150,8,46); }
+  else { ctx.fillRect(-bodyW/2+4,-130,bodyW-8,22); }
+  ctx.restore();
+
+  if(state.muzzleFlashT>0){
+    const a = state.muzzleFlashT/0.12;
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(SCREEN_W/2, SCREEN_H-150, 10+(w.big?50:18)*(1-a), 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  const m = state.monster;
+  ctx.save();
+  ctx.font = '12px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(SCREEN_W/2-110, 8, 220, 20);
+  ctx.fillStyle = '#eee';
+  const hpText = m.mode==='defeated' ? `destroyed — back in ${Math.ceil(m.defeatedT)}s` : `${Math.max(0,m.health)} HP`;
+  ctx.fillText(`${w.name} — She: ${hpText}`, SCREEN_W/2, 22);
+  ctx.textAlign = 'left';
+  ctx.restore();
+}
+
+function drawStunGunViewmodel(){
+  if(!state.hasStunGun || state.hiding) return;
+  if(state.cheats.weapon && state.cheats.weapon!=='none') return; // dev weapon takes over the hands
+  const kick = state.weaponKickT>0 ? (state.weaponKickT/0.18)*14 : 0;
+  const bob = Math.sin(performance.now()/220)*4;
+  ctx.save();
+  ctx.translate(SCREEN_W/2, SCREEN_H-14+bob+kick);
+  ctx.fillStyle = '#1a1512';
+  ctx.fillRect(-18,-100,36,100);
+  ctx.fillStyle = '#3a3a3a';
+  ctx.fillRect(-14,-128,28,22);
+  ctx.fillStyle = state.stunCharges>0 ? '#5ec7d9' : '#555';
+  ctx.shadowColor = '#5ec7d9'; ctx.shadowBlur = state.stunCharges>0 ? 10 : 0;
+  ctx.fillRect(6,-134,8,12);
+  ctx.restore();
+
+  if(state.muzzleFlashT>0 && (!state.cheats.weapon || state.cheats.weapon==='none')){
+    const a = state.muzzleFlashT/0.12;
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.fillStyle = '#bfefff';
+    ctx.beginPath(); ctx.arc(SCREEN_W/2, SCREEN_H-140, 8+14*(1-a), 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.save();
+  ctx.font = '12px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(SCREEN_W/2-110, 8, 220, 20);
+  ctx.fillStyle = '#bfefff';
+  ctx.fillText(`Stun Gun — ${state.stunCharges} dart${state.stunCharges===1?'':'s'}`, SCREEN_W/2, 22);
+  ctx.textAlign = 'left';
+  ctx.restore();
+}
+
+function drawMinimap(){
+  const panelW=176, panelH=118, margin=10;
+  const px0 = SCREEN_W-panelW-margin, py0 = SCREEN_H-panelH-margin;
+  ctx.save();
+  ctx.fillStyle='rgba(5,3,3,0.8)';
+  ctx.fillRect(px0,py0,panelW,panelH);
+  ctx.strokeStyle='rgba(138,20,20,0.6)'; ctx.lineWidth=1;
+  ctx.strokeRect(px0+0.5,py0+0.5,panelW-1,panelH-1);
+
+  const scale = Math.min((panelW-10)/(MAPW*TILE), (panelH-10)/(MAPH*TILE));
+  const offX = px0+5, offY = py0+5;
+  const reveal = state.cheats.revealMap;
+
+  ROOMS.forEach((r,i)=>{
+    if(!reveal && !state.visitedRooms[i]) return;
+    const x=offX+r.x*TILE*scale, y=offY+r.y*TILE*scale, w=r.w*TILE*scale, h=r.h*TILE*scale;
+    const isCurrent = i===state.lastRoomId;
+    ctx.fillStyle = isCurrent ? 'rgba(197,40,30,0.55)' : 'rgba(150,140,125,0.3)';
+    ctx.fillRect(x,y,w,h);
+    ctx.strokeStyle = isCurrent ? '#c5281e' : 'rgba(180,170,155,0.4)';
+    ctx.strokeRect(x,y,w,h);
+  });
+
+  const frontHallIdx = ROOMS.findIndex(r=>r.name==='Front Hall');
+  if(reveal || state.visitedRooms[frontHallIdx] || state.keysCollected>=3){
+    const exx = offX+EXIT_PX.x*scale, exy = offY+EXIT_PX.y*scale;
+    const pulse = 0.5+0.5*Math.sin(performance.now()/300);
+    ctx.fillStyle = state.keysCollected>=3 ? `rgba(120,220,120,${0.6+0.3*pulse})` : 'rgba(220,80,60,0.5)';
+    ctx.beginPath(); ctx.arc(exx,exy,3,0,Math.PI*2); ctx.fill();
+  }
+
+  const pdx = offX+state.player.x*scale, pdy = offY+state.player.y*scale;
+  ctx.fillStyle = getSelectedSkin().color;
+  ctx.beginPath(); ctx.arc(pdx,pdy,3,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle = getSelectedSkin().color; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(pdx,pdy);
+  ctx.lineTo(pdx+Math.cos(state.player.angle)*9, pdy+Math.sin(state.player.angle)*9);
+  ctx.stroke();
+
+  ctx.fillStyle='#998'; ctx.font='9px monospace';
+  ctx.fillText('MAP [M]', px0+6, py0+panelH-4);
+  ctx.restore();
+}
+
+function render(){
+  updateLookPrompt();
+  ctx.clearRect(0,0,SCREEN_W,SCREEN_H);
+  if(state.screen!=='playing' && state.screen!=='paused'){ return; }
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,SCREEN_W,SCREEN_H);
+  if(state.hiding){ return; }
+  renderWorld();
+  renderSprites();
+  drawIntuitionCompass();
+  drawViewmodel();
+  drawWeaponViewmodel();
+  drawStunGunViewmodel();
+  if(state.minimapOn) drawMinimap();
+  if(state.cheats.debugInfo) drawDebugInfo();
+}
+
+function drawDebugInfo(){
+  const p = state.player, m = state.monster;
+  const dist = Math.hypot(p.x-m.x, p.y-m.y);
+  const lines = [
+    `player  x:${p.x.toFixed(1)} y:${p.y.toFixed(1)} angle:${p.angle.toFixed(2)}`,
+    `room    ${(ROOMS[state.lastRoomId]||{}).name || '—'}  (id ${state.lastRoomId})`,
+    `monster x:${m.x.toFixed(1)} y:${m.y.toFixed(1)} mode:${m.mode} dist:${dist.toFixed(0)}px`,
+    `keys ${state.keysCollected}/3  notes ${state.notesCollected}/${NOTES.length}  hearts ${state.hearts}/${state.character.maxHearts}`,
+    `battery ${state.battery.toFixed(0)}%  stamina ${state.stamina.toFixed(0)}%  fear ${state.fear.toFixed(2)}`,
+    `hunted:${state.hunted}  hiding:${state.hiding}  elapsed:${formatTime(state.elapsed)}`,
+  ];
+  ctx.save();
+  ctx.font = '12px monospace';
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(8,150,320,lines.length*15+10);
+  ctx.fillStyle = '#7f7';
+  lines.forEach((line,i)=> ctx.fillText(line, 14, 168+i*15));
+  ctx.restore();
+}
+
+/* =========================================================
+   MAIN LOOP
+========================================================= */
+function frame(now){
+  const dt = Math.min(0.05, (now-lastTime)/1000);
+  lastTime = now;
+  update(dt);
+  render();
+  requestAnimationFrame(frame);
+}
+
+generateMap();
+setupItems();
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>
