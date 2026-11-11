@@ -2,13 +2,23 @@ import { getStore } from "@netlify/blobs";
 
 const MAX_STORED = 100;
 const TOP_N = 10;
+const MODES = ["normal", "nightmare", "hard"];
 
-function topFor(data, nightmare){
+function modeOf(e){
+  if (MODES.includes(e.mode)) return e.mode;
+  return e.nightmare ? "nightmare" : "normal"; // back-compat with older entries
+}
+
+function topFor(data, mode){
   return data
-    .filter(e => !!e.nightmare === nightmare)
+    .filter(e => modeOf(e) === mode)
     .slice()
     .sort((a,b)=>a.time-b.time)
     .slice(0, TOP_N);
+}
+
+function allLists(data){
+  return { normal: topFor(data,"normal"), nightmare: topFor(data,"nightmare"), hard: topFor(data,"hard") };
 }
 
 export default async (req) => {
@@ -16,11 +26,7 @@ export default async (req) => {
 
   if (req.method === "GET") {
     const data = (await store.get("scores", { type: "json" })) || [];
-    const body = {
-      normal: topFor(data, false),
-      nightmare: topFor(data, true),
-    };
-    return new Response(JSON.stringify(body), {
+    return new Response(JSON.stringify(allLists(data)), {
       headers: { "content-type": "application/json" },
     });
   }
@@ -33,25 +39,27 @@ export default async (req) => {
     const name = String(payload.name || "Guest").trim().slice(0, 20) || "Guest";
     const time = Number(payload.time);
     const character = String(payload.character || "").slice(0, 30);
-    const nightmare = !!payload.nightmare;
+    const mode = MODES.includes(payload.mode) ? payload.mode : (payload.nightmare ? "nightmare" : "normal");
     const cheated = !!payload.cheated;
     if (!isFinite(time) || time <= 0 || time > 36000) {
       return new Response("Invalid score", { status: 400 });
     }
 
     const data = (await store.get("scores", { type: "json" })) || [];
-    data.push({ name, time, character, nightmare, cheated, at: Date.now() });
+    data.push({ name, time, character, mode, cheated, at: Date.now() });
 
     // keep the dataset bounded: top MAX_STORED per mode, sorted by time
-    const keepNormal = data.filter(e=>!e.nightmare).sort((a,b)=>a.time-b.time).slice(0, MAX_STORED);
-    const keepNightmare = data.filter(e=>e.nightmare).sort((a,b)=>a.time-b.time).slice(0, MAX_STORED);
-    const trimmed = keepNormal.concat(keepNightmare);
+    let trimmed = [];
+    for (const m of MODES) {
+      trimmed = trimmed.concat(
+        data.filter(e => modeOf(e) === m).sort((a,b)=>a.time-b.time).slice(0, MAX_STORED)
+      );
+    }
     await store.setJSON("scores", trimmed);
 
-    return new Response(JSON.stringify({
-      normal: topFor(trimmed, false),
-      nightmare: topFor(trimmed, true),
-    }), { headers: { "content-type": "application/json" } });
+    return new Response(JSON.stringify(allLists(trimmed)), {
+      headers: { "content-type": "application/json" },
+    });
   }
 
   return new Response("Method not allowed", { status: 405 });

@@ -276,6 +276,10 @@
     margin-top:14px; font-size:12px; color:#b99; letter-spacing:1px; cursor:pointer; user-select:none;
   }
   #nightmareToggle input{ accent-color:#8a1414; margin-right:8px; vertical-align:middle; }
+  #hardToggle{
+    margin-top:6px; font-size:12px; color:#e05a4a; letter-spacing:1px; cursor:pointer; user-select:none; display:block;
+  }
+  #hardToggle input{ accent-color:#e05a4a; margin-right:8px; vertical-align:middle; }
 
   #crosshair{
     position:absolute; top:50%; left:50%; width:6px; height:6px; margin:-3px 0 0 -3px;
@@ -383,14 +387,18 @@
     <h1 class="title" style="font-size:28px;letter-spacing:5px;">LEADERBOARD</h1>
     <div class="note" style="max-width:560px; margin-bottom:16px;">Fastest escapes from everyone who's played Blackwood Asylum at this address. Runs marked <span style="color:#e05a4a;">🛠 DEV</span> used Developer Mode cheats.</div>
     <div id="leaderboardStatus" style="color:#876; font-size:12px; margin-bottom:10px;"></div>
-    <div style="display:flex; gap:20px; flex-wrap:wrap; justify-content:center; max-width:700px;">
-      <div class="settingsPanel" style="width:300px;">
+    <div style="display:flex; gap:16px; flex-wrap:wrap; justify-content:center; max-width:980px;">
+      <div class="settingsPanel" style="width:260px;">
         <h3>Normal</h3>
         <div id="lbNormal"></div>
       </div>
-      <div class="settingsPanel" style="width:300px;">
+      <div class="settingsPanel" style="width:260px;">
         <h3>Nightmare</h3>
         <div id="lbNightmare"></div>
+      </div>
+      <div class="settingsPanel" style="width:260px; border-color:#e05a4a;">
+        <h3 style="color:#e05a4a;">Hard</h3>
+        <div id="lbHard"></div>
       </div>
     </div>
     <button class="spooky" id="btnLeaderboardBack" style="margin-top:20px;">Back</button>
@@ -402,6 +410,7 @@
     <div class="subtitle" style="margin-bottom:24px;">choose who returns to blackwood</div>
     <div id="charGrid"></div>
     <label id="nightmareToggle"><input type="checkbox" id="chkNightmare"> Nightmare Mode — faster, sharper-eyed, less battery to start</label>
+    <label id="hardToggle"><input type="checkbox" id="chkHardMode"> Hard Mode — everything is twice as brutal</label>
   </div>
 
   <!-- SETTINGS -->
@@ -1125,6 +1134,7 @@ function buildSaveData(){
   return {
     characterId: state.character.id,
     nightmare: state.nightmare,
+    hardMode: state.hardMode,
     player: {x:state.player.x, y:state.player.y, angle:state.player.angle},
     hearts: state.hearts, battery: state.battery, stamina: state.stamina,
     keysCollected: state.keysCollected, notesCollected: state.notesCollected,
@@ -1209,6 +1219,7 @@ const state = {
   hiding:false,
   nearHideSpot:null,
   nightmare:false,
+  hardMode:false,
   elapsed:0,
   ambientSoundTimer:0,
   hunted:false,
@@ -1301,6 +1312,9 @@ function updateBestTimeLine(){
   el('bestTimeLine').textContent = best===null ? '' : `Fastest escape${who}: ${formatTime(best)}`;
 }
 
+el('chkNightmare').addEventListener('change', ()=>{ if(el('chkNightmare').checked) el('chkHardMode').checked = false; });
+el('chkHardMode').addEventListener('change', ()=>{ if(el('chkHardMode').checked) el('chkNightmare').checked = false; });
+
 function buildCharSelect(){
   const grid = el('charGrid');
   grid.innerHTML='';
@@ -1310,6 +1324,7 @@ function buildCharSelect(){
     card.innerHTML = `<h3>${c.name}</h3><div class="role">${c.role}</div><p>${c.bio}</p><div class="ability"><b>Ability:</b> ${c.ability}</div>`;
     card.addEventListener('click', ()=>{
       state.nightmare = !!el('chkNightmare').checked;
+      state.hardMode = !!el('chkHardMode').checked;
       startGame(c);
     });
     grid.appendChild(card);
@@ -1321,6 +1336,7 @@ function startGame(character){
   state.character = character;
   resetGameState();
   if(state.nightmare){ state.battery = 60; }
+  if(state.hardMode){ state.battery = 40; }
   state.screen='playing';
   hide('screen-menu'); hide('screen-select'); hide('gameoverScreen'); hide('winScreen'); hide('pauseScreen'); hide('journal');
   show('hud');
@@ -1338,6 +1354,7 @@ function continueGame(){
   const character = CHARACTERS.find(c=>c.id===save.characterId) || CHARACTERS[0];
   state.character = character;
   state.nightmare = !!save.nightmare;
+  state.hardMode = !!save.hardMode;
   resetGameState();
 
   state.player.x = save.player.x; state.player.y = save.player.y; state.player.angle = save.player.angle;
@@ -1465,17 +1482,20 @@ async function openLeaderboard(){
   el('leaderboardStatus').textContent = 'Loading...';
   el('lbNormal').innerHTML = '';
   el('lbNightmare').innerHTML = '';
+  el('lbHard').innerHTML = '';
   try{
     const res = await fetch('/api/leaderboard');
     if(!res.ok) throw new Error('bad response');
     const data = await res.json();
     renderLbList('lbNormal', data.normal);
     renderLbList('lbNightmare', data.nightmare);
+    renderLbList('lbHard', data.hard);
     el('leaderboardStatus').textContent = '';
   }catch(e){
     el('leaderboardStatus').textContent = 'Leaderboard unavailable right now (needs the hosted site, not a local file).';
     renderLbList('lbNormal', []);
     renderLbList('lbNightmare', []);
+    renderLbList('lbHard', []);
   }
 }
 function closeLeaderboard(){
@@ -1483,12 +1503,12 @@ function closeLeaderboard(){
   updateBestTimeLine(); updateContinueUI();
   show('screen-menu');
 }
-async function submitScore(time, nightmare, cheated){
+async function submitScore(time, mode, cheated){
   try{
     await fetch('/api/leaderboard', {
       method:'POST',
       headers:{'content-type':'application/json'},
-      body: JSON.stringify({ name: currentUsername()||'Guest', time, character: state.character.name, nightmare: !!nightmare, cheated: !!cheated })
+      body: JSON.stringify({ name: currentUsername()||'Guest', time, character: state.character.name, mode, cheated: !!cheated })
     });
   }catch(e){ /* offline or local file — silently skip */ }
 }
@@ -1714,7 +1734,7 @@ function toggleHide(){
   }
   if(state.nearHideSpot){
     state.hiding = true;
-    state.hideTimer = MAX_HIDE_TIME;
+    state.hideTimer = state.hardMode ? MAX_HIDE_TIME/2 : MAX_HIDE_TIME;
     el('hideOverlay').classList.add('on');
     showHint('', 1);
   }
@@ -1903,6 +1923,7 @@ function difficultyMult(){
   if(state.keysCollected>=2) speedMult=1.26;
   if(state.keysCollected>=3) speedMult=1.45;
   if(state.nightmare) speedMult*=1.2;
+  if(state.hardMode) speedMult*=2;
   return speedMult;
 }
 
@@ -1980,8 +2001,9 @@ function update(dt){
     if(state.cheats.noclip){ p.x += mx; p.y += my; }
     else { moveEntity(p, mx, my); }
   }
-  if(sprinting){ state.stamina = Math.max(0,state.stamina-38*dt); }
-  else { state.stamina = Math.min(100,state.stamina+16*dt); }
+  const hardMult = state.hardMode ? 2 : 1;
+  if(sprinting){ state.stamina = Math.max(0,state.stamina-38*hardMult*dt); }
+  else { state.stamina = Math.min(100,state.stamina+(16/hardMult)*dt); }
 
   // footsteps
   if(moving){
@@ -1993,10 +2015,10 @@ function update(dt){
   if(state.cheats.infiniteBattery){
     state.battery = 100; state.stamina = 100;
   } else if(state.flashlightOn){
-    state.battery = Math.max(0, state.battery - 6*c.battMult*dt);
+    state.battery = Math.max(0, state.battery - 6*c.battMult*hardMult*dt);
     if(state.battery<=0) state.flashlightOn=false;
   } else {
-    state.battery = Math.min(100, state.battery + 2.2*dt);
+    state.battery = Math.min(100, state.battery + (2.2/hardMult)*dt);
   }
 
   // ---- room tracking / scares ----
@@ -2161,7 +2183,7 @@ function fireStunGun(){
   Audio_.weaponFire('hitscan', 0.35, hit);
   if(hit && state.monster.mode!=='defeated'){
     state.monster.mode='retreat';
-    state.monster.retreatT = 5;
+    state.monster.retreatT = state.hardMode ? 2.5 : 5;
     showHint('Tranquilizer hit — she staggers back, stunned!', 2600);
   } else {
     showHint('Missed...', 1200);
@@ -2341,7 +2363,8 @@ function winGame(){
   if(isBest) stats += '  —  NEW BEST TIME';
   if(unlocked.length) stats += `\nNew skin unlocked: ${unlocked.join(', ')} (see Settings)`;
   if(state.usedCheatsThisRun){ stats += '\n(Dev tools were used — flagged as such on the leaderboard)'; }
-  submitScore(state.elapsed, state.nightmare, state.usedCheatsThisRun);
+  const lbMode = state.hardMode ? 'hard' : (state.nightmare ? 'nightmare' : 'normal');
+  submitScore(state.elapsed, lbMode, state.usedCheatsThisRun);
   el('winStats').textContent = stats;
   show('winScreen');
   el('hud').classList.add('hidden');
