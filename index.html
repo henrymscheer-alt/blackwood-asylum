@@ -175,6 +175,32 @@
   #winScreen h1{ color:#c9a84c; text-shadow:0 0 20px rgba(201,168,76,0.6);}
   .epilogue{ max-width:600px; font-size:15px; line-height:1.9; color:#ccc0a8; font-family:Georgia,serif; font-style:italic; margin-bottom:30px; padding:0 20px;}
 
+  #guestSavePrompt{
+    position:absolute; inset:0; z-index:45; background:rgba(5,3,3,0.82);
+    display:flex; align-items:center; justify-content:center;
+  }
+  #guestSavePrompt.hidden{ display:none; }
+  #guestSavePrompt .box{
+    background:#120d0d; border:1px solid var(--blood); border-radius:6px;
+    padding:26px 30px; max-width:360px; text-align:center;
+    box-shadow:0 0 40px rgba(138,20,20,0.35);
+  }
+  #guestSavePrompt h3{ color:var(--bloodbright); letter-spacing:2px; margin:0 0 10px 0; }
+  #guestSavePrompt p{ color:#ccc0a8; font-size:13px; line-height:1.6; margin:0 0 18px 0; }
+  #guestSavePrompt .settingsRow{ justify-content:center; }
+
+  #wakeUpScreen{
+    position:absolute; inset:0; z-index:48; background:#000;
+    display:flex; align-items:center; justify-content:center;
+    opacity:0; pointer-events:none; transition:opacity 1.4s ease;
+  }
+  #wakeUpScreen.show{ opacity:1; transition:opacity .3s ease; }
+  #wakeUpScreen p{
+    color:#9a8a78; font-family:Georgia,serif; font-style:italic; font-size:16px;
+    letter-spacing:1px; max-width:460px; text-align:center; padding:0 20px; line-height:1.8;
+    text-shadow:0 0 14px #000;
+  }
+
   #scarePrelude{
     position:absolute; inset:0; z-index:49; background:#000; opacity:0; pointer-events:none;
   }
@@ -385,7 +411,7 @@
   <!-- LEADERBOARD -->
   <div id="screen-leaderboard" class="fullscreen-ui hidden">
     <h1 class="title" style="font-size:28px;letter-spacing:5px;">LEADERBOARD</h1>
-    <div class="note" style="max-width:560px; margin-bottom:16px;">Fastest escapes from everyone who's played Blackwood Asylum at this address. Runs marked <span style="color:#e05a4a;">🛠 DEV</span> used Developer Mode cheats.</div>
+    <div class="note" style="max-width:560px; margin-bottom:16px;">A worldwide leaderboard — every player of Blackwood Asylum, anywhere, competes on the same board. Runs marked <span style="color:#e05a4a;">🛠 DEV</span> used Developer Mode cheats.</div>
     <div id="leaderboardStatus" style="color:#876; font-size:12px; margin-bottom:10px;"></div>
     <div style="display:flex; gap:16px; flex-wrap:wrap; justify-content:center; max-width:980px;">
       <div class="settingsPanel" style="width:260px;">
@@ -410,7 +436,7 @@
     <div class="subtitle" style="margin-bottom:24px;">choose who returns to blackwood</div>
     <div id="charGrid"></div>
     <label id="nightmareToggle"><input type="checkbox" id="chkNightmare"> Nightmare Mode — faster, sharper-eyed, less battery to start</label>
-    <label id="hardToggle"><input type="checkbox" id="chkHardMode"> Hard Mode — everything is twice as brutal</label>
+    <label id="hardToggle"><input type="checkbox" id="chkHardMode"> Hard Mode — everything is three times as brutal, no Developer Mode</label>
   </div>
 
   <!-- SETTINGS -->
@@ -452,6 +478,7 @@
       </div>
       <div id="devUnlocked" class="hidden">
         <div class="settingsMsg ok">Developer Mode unlocked.</div>
+        <div class="settingsMsg" id="devHardModeWarning" style="display:none; color:#e05a4a;">Hard Mode is active — all Developer Mode cheats are disabled for this run.</div>
         <div id="devMenu">
           <div class="devSection">Player</div>
           <label><input type="checkbox" id="chkGod"> God Mode (no damage)</label>
@@ -539,8 +566,19 @@
     <p class="epilogue" id="winText"></p>
     <div id="winStats" style="color:#998; font-size:12px; letter-spacing:1px; margin:-16px 0 24px 0; white-space:pre-line;"></div>
     <button class="spooky" id="btnPlayAgain">Play Again</button>
+    <div id="guestSavePrompt" class="hidden">
+      <div class="box">
+        <h3>Save Your Score?</h3>
+        <p>You're playing as a Guest — your time made the leaderboard under "Guest" but isn't tied to you. Log in or sign up (free, local to this device) so your scores are saved under your name.</p>
+        <div class="settingsRow">
+          <button id="btnGuestPromptSignIn">Log In / Sign Up</button>
+          <button id="btnGuestPromptDismiss">No thanks</button>
+        </div>
+      </div>
+    </div>
   </div>
 
+  <div id="wakeUpScreen"></div>
   <div id="scarePrelude"></div>
   <button id="muteBtn" title="Mute/unmute">🔊</button>
   <div id="jumpscare"></div>
@@ -888,7 +926,7 @@ function roomIdAtPx(px,py){ const r=roomIdGrid[Math.floor(py/TILE)]; return r? r
 
 /* Items */
 function P(tx,ty){ return {x:tx*TILE+TILE/2, y:ty*TILE+TILE/2}; }
-let KEYS, NOTES, HIDESPOTS, STUNITEMS, EXIT_PX, START_PX, MONSTER_WAYPOINTS;
+let KEYS, NOTES, HIDESPOTS, STUNITEMS, FURNITURE, EXIT_PX, START_PX, START_ANGLE, MONSTER_WAYPOINTS;
 
 function shuffle(arr){
   const a = arr.slice();
@@ -958,8 +996,36 @@ function setupItems(){
   });
 
   EXIT_PX = P(14,17);
-  START_PX = P(4,3);
+  START_PX = P(4,10);       // wake up in the Patient Ward...
+  START_ANGLE = Math.PI;    // ...facing the bed you just got out of
   MONSTER_WAYPOINTS = [P(24,10), P(23,4), P(14,10), P(23,17)];
+
+  const spawnBed = P(3,10);
+  FURNITURE = [ {...spawnBed, type:'bed', room:"Patient Ward"} ];
+  const furnAvoid0 = avoid.concat([spawnBed]);
+
+  const FURNITURE_PLAN = [
+    {room:"Patient Ward", type:'bed', count:2},
+    {room:"Patient Ward", type:'wheelchair', count:1},
+    {room:"Morgue", type:'gurney', count:2},
+    {room:"Morgue", type:'cabinet', count:1},
+    {room:"Kitchen", type:'cart', count:1},
+    {room:"Supply Closet", type:'cabinet', count:1},
+    {room:"Matron's Office", type:'desk', count:1},
+    {room:"Matron's Office", type:'cabinet', count:1},
+    {room:"Library", type:'desk', count:1},
+    {room:"Front Hall", type:'wheelchair', count:1},
+    {room:"Front Hall", type:'ivstand', count:1},
+    {room:"Entrance Foyer", type:'ivstand', count:1},
+  ];
+  const furnAvoid = furnAvoid0.slice();
+  FURNITURE_PLAN.forEach(plan=>{
+    for(let i=0;i<plan.count;i++){
+      const pt = randomSpotInRoom(plan.room, furnAvoid);
+      furnAvoid.push(pt);
+      FURNITURE.push({...pt, type:plan.type, room:plan.room});
+    }
+  });
 }
 
 /* =========================================================
@@ -1240,7 +1306,7 @@ const state = {
 
 function resetGameState(){
   const c = state.character;
-  state.player = { x:START_PX.x, y:START_PX.y, r:11, angle:0 };
+  state.player = { x:START_PX.x, y:START_PX.y, r:11, angle:START_ANGLE||0 };
   state.monster = { x:MONSTER_WAYPOINTS[0].x, y:MONSTER_WAYPOINTS[0].y, r:13,
     mode:'chase', retreatT:0, stuckT:0, lastKnownX:undefined, lastKnownY:undefined,
     health:100, defeatedT:0 };
@@ -1336,7 +1402,7 @@ function startGame(character){
   state.character = character;
   resetGameState();
   if(state.nightmare){ state.battery = 60; }
-  if(state.hardMode){ state.battery = 40; }
+  if(state.hardMode){ state.battery = 30; }
   state.screen='playing';
   hide('screen-menu'); hide('screen-select'); hide('gameoverScreen'); hide('winScreen'); hide('pauseScreen'); hide('journal');
   show('hud');
@@ -1345,6 +1411,24 @@ function startGame(character){
   state.paused=false;
   lastTime = performance.now();
   saveRunState();
+  playWakeUpIntro();
+}
+
+function playWakeUpIntro(){
+  const w = el('wakeUpScreen');
+  w.innerHTML = '';
+  const p = document.createElement('p');
+  p.textContent = "You wake up on a cold hospital bed, restraints hanging loose. The ward is silent. Too silent.";
+  w.appendChild(p);
+  state.paused = true;
+  w.classList.add('show');
+  setTimeout(()=>{
+    w.classList.remove('show');
+    setTimeout(()=>{
+      state.paused = false;
+      lastTime = performance.now();
+    }, 1400);
+  }, 2000);
 }
 
 function continueGame(){
@@ -1427,6 +1511,8 @@ el('btnQuitToMenu').addEventListener('click', ()=>{ togglePause(false); goMenu()
 el('btnRetry').addEventListener('click', ()=> startGame(state.character));
 el('btnGoMenuFromOver').addEventListener('click', goMenu);
 el('btnPlayAgain').addEventListener('click', goMenu);
+el('btnGuestPromptDismiss').addEventListener('click', ()=> hide('guestSavePrompt'));
+el('btnGuestPromptSignIn').addEventListener('click', ()=> openSettings('win'));
 
 function updateMuteBtn(){
   el('muteBtn').textContent = Audio_.isMuted() ? '🔇' : '🔊';
@@ -1451,13 +1537,19 @@ window.addEventListener('beforeunload', ()=>{ if(state.screen==='playing') saveR
 let settingsReturnTo = 'menu';
 function openSettings(from){
   settingsReturnTo = from;
-  if(from==='menu'){ hide('screen-menu'); } else { hide('pauseScreen'); }
+  if(from==='menu'){ hide('screen-menu'); }
+  else if(from==='win'){ hide('winScreen'); }
+  else { hide('pauseScreen'); }
   renderSettings();
   show('screen-settings');
 }
 function closeSettings(){
   hide('screen-settings');
   if(settingsReturnTo==='pause'){ show('pauseScreen'); }
+  else if(settingsReturnTo==='win'){
+    show('winScreen');
+    if(currentUsername()){ hide('guestSavePrompt'); }
+  }
   else { updateBestTimeLine(); updateContinueUI(); show('screen-menu'); }
 }
 
@@ -1540,6 +1632,10 @@ function renderSettings(){
   el('devLocked').classList.toggle('hidden', devUnlocked);
   el('devUnlocked').classList.toggle('hidden', !devUnlocked);
   if(devUnlocked){
+    const blocked = state.screen==='playing' && state.hardMode;
+    el('devHardModeWarning').style.display = blocked ? '' : 'none';
+    el('devMenu').style.opacity = blocked ? '0.4' : '1';
+    el('devMenu').style.pointerEvents = blocked ? 'none' : 'auto';
     el('chkGod').checked = state.cheats.god;
     el('chkInfiniteBattery').checked = state.cheats.infiniteBattery;
     el('chkNoclip').checked = state.cheats.noclip;
@@ -1603,28 +1699,29 @@ el('chkRevealMap').addEventListener('change', e=> state.cheats.revealMap = e.tar
 el('chkForceHunted').addEventListener('change', e=> state.hunted = e.target.checked);
 el('chkDebugInfo').addEventListener('change', e=> state.cheats.debugInfo = e.target.checked);
 
+function devToolsBlocked(){ return state.screen==='playing' && state.hardMode; }
 el('btnCheatAllKeys').addEventListener('click', ()=>{
-  if(state.screen==='playing'){ KEYS.forEach(k=>k.taken=true); state.keysCollected = 3; }
+  if(state.screen==='playing' && !devToolsBlocked()){ KEYS.forEach(k=>k.taken=true); state.keysCollected = 3; }
 });
 el('btnCheatTeleportExit').addEventListener('click', ()=>{
-  if(state.screen==='playing'){ state.player.x = EXIT_PX.x; state.player.y = EXIT_PX.y; }
+  if(state.screen==='playing' && !devToolsBlocked()){ state.player.x = EXIT_PX.x; state.player.y = EXIT_PX.y; }
 });
-el('btnCheatResetScares').addEventListener('click', ()=>{ state.scaredRooms = {}; });
-el('btnCheatWin').addEventListener('click', ()=>{ if(state.screen==='playing') winGame(); });
+el('btnCheatResetScares').addEventListener('click', ()=>{ if(!devToolsBlocked()) state.scaredRooms = {}; });
+el('btnCheatWin').addEventListener('click', ()=>{ if(state.screen==='playing' && !devToolsBlocked()) winGame(); });
 el('btnCheatHeal').addEventListener('click', ()=>{
-  if(state.screen==='playing') state.hearts = state.character.maxHearts;
+  if(state.screen==='playing' && !devToolsBlocked()) state.hearts = state.character.maxHearts;
 });
 el('btnCheatRefill').addEventListener('click', ()=>{
-  if(state.screen==='playing'){ state.battery=100; state.stamina=100; }
+  if(state.screen==='playing' && !devToolsBlocked()){ state.battery=100; state.stamina=100; }
 });
-el('btnCheatKill').addEventListener('click', ()=>{ if(state.screen==='playing') loseGame(); });
+el('btnCheatKill').addEventListener('click', ()=>{ if(state.screen==='playing' && !devToolsBlocked()) loseGame(); });
 el('btnCheatMonsterHere').addEventListener('click', ()=>{
-  if(state.screen!=='playing') return;
+  if(state.screen!=='playing' || devToolsBlocked()) return;
   const p = state.player, m = state.monster;
   m.x = p.x + Math.cos(p.angle)*80; m.y = p.y + Math.sin(p.angle)*80;
 });
 el('btnCheatMonsterAway').addEventListener('click', ()=>{
-  if(state.screen!=='playing') return;
+  if(state.screen!=='playing' || devToolsBlocked()) return;
   state.monster.x = MONSTER_WAYPOINTS[0].x; state.monster.y = MONSTER_WAYPOINTS[0].y;
   state.monster.mode='retreat'; state.monster.retreatT=3;
 });
@@ -1734,7 +1831,7 @@ function toggleHide(){
   }
   if(state.nearHideSpot){
     state.hiding = true;
-    state.hideTimer = state.hardMode ? MAX_HIDE_TIME/2 : MAX_HIDE_TIME;
+    state.hideTimer = state.hardMode ? MAX_HIDE_TIME/3 : MAX_HIDE_TIME;
     el('hideOverlay').classList.add('on');
     showHint('', 1);
   }
@@ -1923,7 +2020,7 @@ function difficultyMult(){
   if(state.keysCollected>=2) speedMult=1.26;
   if(state.keysCollected>=3) speedMult=1.45;
   if(state.nightmare) speedMult*=1.2;
-  if(state.hardMode) speedMult*=2;
+  if(state.hardMode) speedMult*=3;
   return speedMult;
 }
 
@@ -1993,15 +2090,15 @@ function update(dt){
   if(moving){
     const len = Math.hypot(fwd,strafe); fwd/=len; strafe/=len;
     sprinting = (K.has('ShiftLeft')||K.has('ShiftRight')) && state.stamina>2;
-    const spd = (sprinting?SPRINT_SPEED:WALK_SPEED) * c.speedMult * (state.cheats.superSpeed?2.2:1);
+    const spd = (sprinting?SPRINT_SPEED:WALK_SPEED) * c.speedMult * ((!state.hardMode && state.cheats.superSpeed)?2.2:1);
     const fx = Math.cos(p.angle), fy = Math.sin(p.angle);
     const sx = Math.cos(p.angle+Math.PI/2), sy = Math.sin(p.angle+Math.PI/2);
     const mx = (fx*fwd + sx*strafe) * spd*dt;
     const my = (fy*fwd + sy*strafe) * spd*dt;
-    if(state.cheats.noclip){ p.x += mx; p.y += my; }
+    if(!state.hardMode && state.cheats.noclip){ p.x += mx; p.y += my; }
     else { moveEntity(p, mx, my); }
   }
-  const hardMult = state.hardMode ? 2 : 1;
+  const hardMult = state.hardMode ? 3 : 1;
   if(sprinting){ state.stamina = Math.max(0,state.stamina-38*hardMult*dt); }
   else { state.stamina = Math.min(100,state.stamina+(16/hardMult)*dt); }
 
@@ -2012,7 +2109,7 @@ function update(dt){
   }
 
   // ---- flashlight battery ----
-  if(state.cheats.infiniteBattery){
+  if(!state.hardMode && state.cheats.infiniteBattery){
     state.battery = 100; state.stamina = 100;
   } else if(state.flashlightOn){
     state.battery = Math.max(0, state.battery - 6*c.battMult*hardMult*dt);
@@ -2082,7 +2179,7 @@ function update(dt){
   }
 
   // ---- monster AI ----
-  if(!state.cheats.freezeMonster) updateMonster(m,p,dt,c,false);
+  if(state.hardMode || !state.cheats.freezeMonster) updateMonster(m,p,dt,c,false);
 
   // ---- fear meter ----
   const distToMonster = Math.hypot(p.x-m.x,p.y-m.y);
@@ -2183,7 +2280,7 @@ function fireStunGun(){
   Audio_.weaponFire('hitscan', 0.35, hit);
   if(hit && state.monster.mode!=='defeated'){
     state.monster.mode='retreat';
-    state.monster.retreatT = state.hardMode ? 2.5 : 5;
+    state.monster.retreatT = state.hardMode ? 5/3 : 5;
     showHint('Tranquilizer hit — she staggers back, stunned!', 2600);
   } else {
     showHint('Missed...', 1200);
@@ -2198,7 +2295,7 @@ function updateWeapon(dt){
   if(state.stunGunCooldown>0) state.stunGunCooldown -= dt;
 
   const firing = state.firing || state.keys.has('KeyR');
-  const weaponId = state.cheats.weapon;
+  const weaponId = state.hardMode ? 'none' : state.cheats.weapon;
 
   if(weaponId && weaponId!=='none'){
     const w = WEAPONS[weaponId];
@@ -2274,7 +2371,7 @@ function updateMonster(m,p,dt,c,hidden){
 
   // She is always coming. Slow, relentless, never stops — unless you're hidden,
   // in which case she heads for where she last saw you and waits there.
-  const speed = MONSTER_SPEED_BASE * difficultyMult() * (state.cheats.monsterSpeedMult||1);
+  const speed = MONSTER_SPEED_BASE * difficultyMult() * (state.hardMode ? 1 : (state.cheats.monsterSpeedMult||1));
 
   if(m.mode==='retreat'){
     m.retreatT -= dt;
@@ -2338,13 +2435,14 @@ function onCaught(){
   moveEntity(p, Math.cos(a)*70, Math.sin(a)*70);
   m.mode='retreat'; m.retreatT=4.5;
   state.invuln = 2.2;
-  if(state.cheats.god){
-    triggerJumpscare('catch');
+  const isNormalMode = !state.nightmare && !state.hardMode;
+  if(!state.hardMode && state.cheats.god){
+    if(isNormalMode) triggerJumpscare('catch');
     showHint('God Mode — no damage taken.', 2000);
     return;
   }
   state.hearts--;
-  triggerJumpscare((state.hearts<=0 || state.hunted) ? 'final' : 'catch');
+  if(isNormalMode) triggerJumpscare((state.hearts<=0 || state.hunted) ? 'final' : 'catch');
   if(state.hearts<=0){ setTimeout(loseGame, 650); }
   else { showHint(`You got away... barely. (${state.hearts} heart${state.hearts>1?'s':''} left)`, 2600); }
 }
@@ -2368,6 +2466,7 @@ function winGame(){
   el('winStats').textContent = stats;
   show('winScreen');
   el('hud').classList.add('hidden');
+  if(currentUsername()){ hide('guestSavePrompt'); } else { show('guestSavePrompt'); }
 }
 function loseGame(){
   state.screen='gameover';
@@ -2441,11 +2540,19 @@ function renderWorld(){
   const p = state.player;
 
   const skyGrad = ctx.createLinearGradient(0,0,0,SCREEN_H/2);
-  skyGrad.addColorStop(0,'#0a0708'); skyGrad.addColorStop(1,'#1a1210');
+  skyGrad.addColorStop(0,'#07090a'); skyGrad.addColorStop(1,'#141c17');
   ctx.fillStyle = skyGrad; ctx.fillRect(0,0,SCREEN_W,SCREEN_H/2);
   const floorGrad = ctx.createLinearGradient(0,SCREEN_H/2,0,SCREEN_H);
-  floorGrad.addColorStop(0,'#1c130f'); floorGrad.addColorStop(1,'#060403');
+  floorGrad.addColorStop(0,'#1a1f1a'); floorGrad.addColorStop(1,'#050604');
   ctx.fillStyle = floorGrad; ctx.fillRect(0,SCREEN_H/2,SCREEN_W,SCREEN_H/2);
+
+  // cheap receding tile-grout lines to read as hospital floor tiling
+  ctx.strokeStyle = 'rgba(0,0,0,0.22)'; ctx.lineWidth = 1;
+  for(let r=1;r<=7;r++){
+    const t = r/7;
+    const y = SCREEN_H/2 + Math.pow(t,2.3)*(SCREEN_H/2);
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(SCREEN_W,y); ctx.stroke();
+  }
 
   const flicker = 1 - (Math.sin(performance.now()/231)*0.025 + Math.sin(performance.now()/97)*0.02);
   const ambientDist = 4.3*TILE*flicker;
@@ -2473,7 +2580,9 @@ function renderWorld(){
     const baseShade = side===1 ? 0.68 : 1.0;
     const wallTileX = Math.floor((p.x+Math.cos(rayAngle)*dist)/TILE), wallTileY=Math.floor((p.y+Math.sin(rayAngle)*dist)/TILE);
     const tileParity = ((wallTileX+wallTileY)%2)===0;
-    let baseR = tileParity?48:42, baseG = tileParity?42:38, baseB = tileParity?54:48;
+    // sickly pale green-white institutional paint, instead of brick brown
+    let baseR = tileParity?60:52, baseG = tileParity?68:60, baseB = tileParity?60:53;
+    const grimy = ((wallTileX*13 + wallTileY*7) % 11) < 2; // ~18% of wall tiles carry a grime/water stain
 
     const x0 = Math.floor(i*STRIP_W), colW = Math.ceil(STRIP_W)+1;
     const brickCol = Math.floor(wallX*BRICK_COLS*2); // *2 so odd rows can half-offset
@@ -2486,8 +2595,12 @@ function renderWorld(){
       const rowOffset = seg%2===0 ? 0 : 1;
       const brickOn = ((brickCol+rowOffset)%2)===0;
       let r=baseR, g=baseG, b=baseB;
-      if(brickOn){ r*=0.84; g*=0.84; b*=0.84; }
-      if(nearMortarV){ r*=0.55; g*=0.55; b*=0.55; }
+      if(brickOn){ r*=0.9; g*=0.9; b*=0.9; }
+      if(nearMortarV){ r*=0.6; g*=0.62; b*=0.6; }
+      // dark wainscoting / dado band along the bottom of the wall, like an old hospital corridor
+      if(seg>=BRICK_ROWS-2){ r*=0.42; g*=0.46; b*=0.42; }
+      if(seg===BRICK_ROWS-1){ r*=0.7; g*=0.7; b*=0.7; } // baseboard, darker still
+      if(grimy && seg<BRICK_ROWS-2){ r*=0.72; g*=0.78; b*=0.72; } // streak of mold/grime down the upper wall
       r*=baseShade; g*=baseShade; b*=baseShade;
 
       if(flashOn && bright>0){
@@ -2563,6 +2676,51 @@ function drawExitSprite(scale){
   ctx.fillStyle = ready ? `rgba(120,220,120,${0.55+0.3*pulse})` : `rgba(220,80,60,${0.4+0.25*pulse})`;
   ctx.fillRect(-14,-24,28,48);
   ctx.strokeStyle = ready ? '#bfe8bf' : '#e8bfbf'; ctx.lineWidth=2; ctx.strokeRect(-14,-24,28,48);
+}
+const FURNITURE_SIZE = { bed:62, wheelchair:34, ivstand:30, gurney:56, cabinet:46, desk:48, cart:36 };
+function drawFurnitureSprite(type, scale){
+  ctx.scale(scale,scale);
+  ctx.shadowColor = 'rgba(180,185,175,0.25)'; ctx.shadowBlur = 6;
+  if(type==='bed'){
+    ctx.fillStyle='#17180f'; ctx.fillRect(-26,12,52,6);
+    ctx.fillStyle='#3c4038'; ctx.fillRect(-26,-14,52,24);
+    ctx.strokeStyle='#15160f'; ctx.lineWidth=1; ctx.strokeRect(-26,-14,52,24);
+    ctx.fillStyle='#4a4e44'; ctx.fillRect(-28,-20,8,34); ctx.fillRect(20,-20,8,34);
+    ctx.fillStyle='#5e5a4e'; ctx.fillRect(-22,-14,15,8);
+  } else if(type==='wheelchair'){
+    ctx.strokeStyle='#2a2a2a'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(-9,12,11,0,Math.PI*2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(10,14,5,0,Math.PI*2); ctx.stroke();
+    ctx.fillStyle='#352a2a'; ctx.fillRect(-15,-12,22,18);
+    ctx.strokeStyle='#161111'; ctx.lineWidth=2; ctx.strokeRect(-15,-12,22,18);
+  } else if(type==='ivstand'){
+    ctx.fillStyle='#5a5a58'; ctx.fillRect(-1,-30,2,42);
+    ctx.fillStyle='#3e3e3c';
+    ctx.beginPath(); ctx.moveTo(-12,12); ctx.lineTo(12,12); ctx.lineTo(0,18); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='rgba(205,215,205,0.5)';
+    ctx.beginPath(); ctx.ellipse(0,-32,6,10,0,0,Math.PI*2); ctx.fill();
+  } else if(type==='gurney'){
+    ctx.fillStyle='#232320'; ctx.fillRect(-28,8,56,5);
+    ctx.fillStyle='#48473f'; ctx.fillRect(-28,-6,56,14);
+    ctx.fillStyle='rgba(195,190,178,0.78)'; ctx.fillRect(-24,-5,48,10);
+    ctx.fillStyle='rgba(100,14,14,0.45)';
+    ctx.beginPath(); ctx.ellipse(7,0,8,4,0,0,Math.PI*2); ctx.fill();
+  } else if(type==='cabinet'){
+    ctx.fillStyle='#34322a'; ctx.fillRect(-17,-28,34,56);
+    ctx.strokeStyle='#17160f'; ctx.lineWidth=1;
+    for(let yy=-20;yy<28;yy+=14){ ctx.strokeRect(-17,yy,34,14); }
+    ctx.fillStyle='#17160f';
+    for(let yy=-20;yy<28;yy+=14){ ctx.fillRect(-3,yy+5,2,5); }
+  } else if(type==='desk'){
+    ctx.fillStyle='#302718'; ctx.fillRect(-28,-4,56,18);
+    ctx.fillStyle='#211a10'; ctx.fillRect(-26,14,10,20); ctx.fillRect(16,14,10,20);
+    ctx.strokeStyle='#120e07'; ctx.lineWidth=1; ctx.strokeRect(-28,-4,56,18);
+  } else if(type==='cart'){
+    ctx.fillStyle='#3a3e3a'; ctx.fillRect(-18,-18,36,10);
+    ctx.fillStyle='#34382f'; ctx.fillRect(-18,-4,36,10);
+    ctx.fillStyle='#2a2e26'; ctx.fillRect(-18,10,36,8);
+    ctx.strokeStyle='#15170f'; ctx.lineWidth=1; ctx.strokeRect(-18,-18,36,36);
+  }
 }
 function drawMonsterSprite(scale, proximity){
   ctx.scale(scale,scale);
@@ -2650,6 +2808,7 @@ function renderSprites(){
   STUNITEMS.forEach(s=>{ if(!s.taken) list.push({x:s.x,y:s.y,type:'stunitem', size:24}); });
   NOTES.forEach(n=>{ if(!n.taken) list.push({x:n.x,y:n.y,type:'note', size:22}); });
   HIDESPOTS.forEach(h=>{ list.push({x:h.x,y:h.y,type:'hide', size:40, near:state.nearHideSpot===h}); });
+  FURNITURE.forEach(f=>{ list.push({x:f.x,y:f.y,type:'furniture', furnType:f.type, size:FURNITURE_SIZE[f.type]||40}); });
   const frontHallIdx = ROOMS.findIndex(r=>r.name==='Front Hall');
   if(state.visitedRooms[frontHallIdx] || state.keysCollected>=3){
     list.push({x:EXIT_PX.x,y:EXIT_PX.y,type:'exit', size:54});
@@ -2662,7 +2821,7 @@ function renderSprites(){
     if(o.dist<2) return;
     if(Math.abs(o.rel) > FOV/2+0.4) return;
     const col = Math.max(0, Math.min(NUM_RAYS-1, Math.floor(NUM_RAYS*(o.rel/FOV+0.5))));
-    const xrayThis = o.type==='monster' && state.cheats.xray;
+    const xrayThis = o.type==='monster' && !state.hardMode && state.cheats.xray;
     if(!xrayThis && o.dist >= zbuffer[col]) return;
 
     const h = Math.min(SCREEN_H*0.85, (o.size/o.dist)*PROJ_DIST);
@@ -2674,6 +2833,7 @@ function renderSprites(){
     else if(o.type==='stunitem') drawStunItemSprite(scale);
     else if(o.type==='hide') drawHideSprite(scale, o.near);
     else if(o.type==='exit') drawExitSprite(scale);
+    else if(o.type==='furniture') drawFurnitureSprite(o.furnType, scale);
     else if(o.type==='monster') drawMonsterSprite(scale, o.proximity);
     ctx.restore();
   });
@@ -2707,7 +2867,7 @@ function drawViewmodel(){
 }
 
 function drawWeaponViewmodel(){
-  const weaponId = state.cheats.weapon;
+  const weaponId = state.hardMode ? 'none' : state.cheats.weapon;
   if(!weaponId || weaponId==='none' || state.hiding) return;
   const w = WEAPONS[weaponId];
   if(!w) return;
@@ -2748,7 +2908,7 @@ function drawWeaponViewmodel(){
 
 function drawStunGunViewmodel(){
   if(!state.hasStunGun || state.hiding) return;
-  if(state.cheats.weapon && state.cheats.weapon!=='none') return; // dev weapon takes over the hands
+  if(!state.hardMode && state.cheats.weapon && state.cheats.weapon!=='none') return; // dev weapon takes over the hands
   const kick = state.weaponKickT>0 ? (state.weaponKickT/0.18)*14 : 0;
   const bob = Math.sin(performance.now()/220)*4;
   ctx.save();
@@ -2762,7 +2922,7 @@ function drawStunGunViewmodel(){
   ctx.fillRect(6,-134,8,12);
   ctx.restore();
 
-  if(state.muzzleFlashT>0 && (!state.cheats.weapon || state.cheats.weapon==='none')){
+  if(state.muzzleFlashT>0 && (state.hardMode || !state.cheats.weapon || state.cheats.weapon==='none')){
     const a = state.muzzleFlashT/0.12;
     ctx.save();
     ctx.globalAlpha = a;
@@ -2793,7 +2953,7 @@ function drawMinimap(){
 
   const scale = Math.min((panelW-10)/(MAPW*TILE), (panelH-10)/(MAPH*TILE));
   const offX = px0+5, offY = py0+5;
-  const reveal = state.cheats.revealMap;
+  const reveal = !state.hardMode && state.cheats.revealMap;
 
   ROOMS.forEach((r,i)=>{
     if(!reveal && !state.visitedRooms[i]) return;
@@ -2839,7 +2999,7 @@ function render(){
   drawWeaponViewmodel();
   drawStunGunViewmodel();
   if(state.minimapOn) drawMinimap();
-  if(state.cheats.debugInfo) drawDebugInfo();
+  if(!state.hardMode && state.cheats.debugInfo) drawDebugInfo();
 }
 
 function drawDebugInfo(){
