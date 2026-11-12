@@ -970,7 +970,7 @@ function edgeSpotInRoom(roomName, avoid){
     let minD = Infinity;
     avoid.forEach(a=>{ minD = Math.min(minD, Math.hypot(pt.x-a.x,pt.y-a.y)); });
     if(minD>bestD){ bestD=minD; best=pt; }
-    if(minD>60) return pt;
+    if(minD>90) return pt;
   }
   return best || P(room.x+1,room.y+1);
 }
@@ -1367,6 +1367,8 @@ function resetGameState(){
   state.weaponKickT = 0;
   state.muzzleFlashT = 0;
   setupItems();
+  build3DFurniture();
+  build3DItems();
 }
 
 /* =========================================================
@@ -1485,6 +1487,7 @@ function continueGame(){
     save.notes.forEach(sn=>{ const n = NOTES.find(x=>x.id===sn.id); if(n) n.taken = sn.taken; });
   }
   if(Array.isArray(save.stunitems)) STUNITEMS = save.stunitems.map(s=>({...s}));
+  build3DItems(); // KEYS/HIDESPOTS/STUNITEMS were just swapped for the saved layout — resync their 3D sprites
 
   state.screen='playing';
   hide('screen-menu'); hide('screen-select'); hide('gameoverScreen'); hide('winScreen'); hide('pauseScreen'); hide('journal');
@@ -2684,12 +2687,18 @@ function buildFurnitureObject(type){
   }
   return g;
 }
+let furnitureObjects = [];
 function build3DFurniture(){
+  // setupItems() re-randomizes FURNITURE on every new game, so the old meshes must go or they'd just pile up
+  furnitureObjects.forEach(o=>scene.remove(o));
+  furnitureObjects = [];
   FURNITURE.forEach(f=>{
     const obj = buildFurnitureObject(f.type);
     obj.position.set(f.x, 0, f.y);
     obj.rotation.y = (Math.random()-0.5)*0.3;
+    obj.scale.set(0.5,0.5,0.5); // half-size so it reads as set-dressing, not an obstacle in the walking path
     scene.add(obj);
+    furnitureObjects.push(obj);
   });
 }
 
@@ -2828,15 +2837,27 @@ function drawMonsterCanvas(proximity){
 
 let keySprites=[], noteSprites=[], stunSprites=[], hideSprites=[], exitSprite=null, monsterSprite=null;
 function build3DItems(){
+  // setupItems() re-randomizes KEYS/NOTES/STUNITEMS/HIDESPOTS/EXIT_PX on every new game (resetGameState -> setupItems),
+  // so the sprites built from the previous layout must be torn down or they'd go stale and silently desync from pickup checks
+  keySprites.forEach(s=>scene.remove(s));
+  noteSprites.forEach(s=>scene.remove(s));
+  stunSprites.forEach(s=>scene.remove(s));
+  hideSprites.forEach(s=>scene.remove(s));
+
   keySprites = KEYS.map(k=>{ const s=makeSprite(keyTex,22); s.position.set(k.x,EYE_HEIGHT,k.y); scene.add(s); return s; });
   noteSprites = NOTES.map(n=>{ const s=makeSprite(noteTex,18); s.position.set(n.x,EYE_HEIGHT,n.y); scene.add(s); return s; });
   stunSprites = STUNITEMS.map(st=>{ const s=makeSprite(stunTex,18); s.position.set(st.x,EYE_HEIGHT,st.y); scene.add(s); return s; });
   hideSprites = HIDESPOTS.map(h=>{ const s=makeSprite(hideTexFar,30); s.position.set(h.x,EYE_HEIGHT,h.y); s.userData.near=false; scene.add(s); return s; });
-  exitSprite = makeSprite(exitTex,40); exitSprite.visible=false; scene.add(exitSprite);
-  monsterSprite = new THREE.Sprite(new THREE.SpriteMaterial({map:monsterTex, transparent:true}));
-  monsterSprite.center.set(0.5, 0.04);
-  monsterSprite.scale.set(44*(110/160), 44, 1);
-  scene.add(monsterSprite);
+
+  if(!exitSprite){ exitSprite = makeSprite(exitTex,40); scene.add(exitSprite); }
+  exitSprite.visible=false;
+
+  if(!monsterSprite){
+    monsterSprite = new THREE.Sprite(new THREE.SpriteMaterial({map:monsterTex, transparent:true}));
+    monsterSprite.center.set(0.5, 0.04);
+    monsterSprite.scale.set(44*(110/160), 44, 1);
+    scene.add(monsterSprite);
+  }
 }
 
 const _camDir = new THREE.Vector3();
