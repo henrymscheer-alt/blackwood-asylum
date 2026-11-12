@@ -1929,6 +1929,7 @@ const FACE_SVGS = [
 </svg>`
 ];
 
+function isNormalMode(){ return !state.nightmare && !state.hardMode; }
 function triggerJumpscare(kind, opts){
   opts = opts || {};
   if(!opts.chained && state.jumpscareLock>0) return;
@@ -2154,7 +2155,6 @@ function update(dt){
     const scareKey = SCARE_ROOMS[room.name];
     if(scareKey && !state.scaredRooms[scareKey]){
       state.scaredRooms[scareKey] = true;
-      setTimeout(()=>{ if(state.screen==='playing' && !state.paused && !state.hiding && !state.journalOpen) triggerJumpscare('scripted'); }, 450);
     }
   }
 
@@ -2170,7 +2170,6 @@ function update(dt){
         setTimeout(()=>{
           if(state.screen==='playing' && !state.paused && !state.journalOpen){
             showHint("Something changed. She knows you have them now.", 3400);
-            triggerJumpscare('final');
           }
         }, 700);
       }
@@ -2221,15 +2220,6 @@ function update(dt){
     Audio_.monsterGrowl();
   }
   el('fearPulse').classList.toggle('on', state.fear>0.55 || state.afterGlowT>0);
-
-  // ---- ambient jumpscares ----
-  state.ambientTimer -= dt;
-  if(state.ambientTimer<=0){
-    state.ambientTimer = (state.hunted ? 16 : 26) + Math.random()*22;
-    if(state.jumpscareLock<=0 && m.mode!=='chase'){
-      triggerJumpscare('ambient');
-    }
-  }
 
   // ---- ambient atmosphere sounds (no jumpscare, just dread) ----
   state.ambientSoundTimer -= dt;
@@ -2462,14 +2452,13 @@ function onCaught(){
   moveEntity(p, Math.cos(a)*70, Math.sin(a)*70);
   m.mode='retreat'; m.retreatT=4.5;
   state.invuln = 2.2;
-  const isNormalMode = !state.nightmare && !state.hardMode;
   if(!state.hardMode && state.cheats.god){
-    if(isNormalMode) triggerJumpscare('catch');
+    if(isNormalMode()) triggerJumpscare('catch');
     showHint('God Mode — no damage taken.', 2000);
     return;
   }
   state.hearts--;
-  if(isNormalMode) triggerJumpscare((state.hearts<=0 || state.hunted) ? 'final' : 'catch');
+  if(isNormalMode()) triggerJumpscare((state.hearts<=0 || state.hunted) ? 'final' : 'catch');
   if(state.hearts<=0){ setTimeout(loseGame, 650); }
   else { showHint(`You got away... barely. (${state.hearts} heart${state.hearts>1?'s':''} left)`, 2600); }
 }
