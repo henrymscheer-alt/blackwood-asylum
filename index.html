@@ -824,6 +824,11 @@ const Audio_ = (function(){
     tone(780,0.15,'triangle',0.25,0.07);
     tone(1040,0.2,'triangle',0.2,0.14);
   }
+  function noiseBurstThrow(){
+    tone(480,0.08,'square',0.2,0);
+    noiseBurst(0.3,0.25,1800,0.1);
+    tone(220,0.12,'triangle',0.2,0.26);
+  }
   function unlockChime(){
     tone(220,0.3,'sawtooth',0.3,0);
     tone(440,0.4,'sine',0.25,0.1);
@@ -876,7 +881,7 @@ const Audio_ = (function(){
   }
   function stopHeartbeat(){ if(hbTimer){ clearInterval(hbTimer); hbTimer=null; hbInterval=null; } }
 
-  return { ensure, jumpscareSting, preScareCue, pickupChime, tapePlay, powerDown, powerUp, keyChime, unlockChime, loseSting, winChime,
+  return { ensure, jumpscareSting, preScareCue, pickupChime, tapePlay, powerDown, powerUp, keyChime, noiseBurstThrow, unlockChime, loseSting, winChime,
            startDrone, stopDrone, setDroneIntensity, footstep, startHeartbeat, stopHeartbeat,
            distantBang, distantWhisper, doorCreak, monsterGrowl, weaponFire, monsterDefeated, setMuted, isMuted };
 })();
@@ -959,7 +964,7 @@ function roomIdAtPx(px,py){ const r=roomIdGrid[Math.floor(py/TILE)]; return r? r
 
 /* Items */
 function P(tx,ty){ return {x:tx*TILE+TILE/2, y:ty*TILE+TILE/2}; }
-let KEYS, NOTES, TAPES, HIDESPOTS, STUNITEMS, FURNITURE, EXIT_PX, START_PX, START_ANGLE, MONSTER_WAYPOINTS, ORDERLY_WAYPOINTS;
+let KEYS, NOTES, TAPES, HIDESPOTS, STUNITEMS, PEPPERITEMS, NOISEITEMS, FURNITURE, EXIT_PX, START_PX, START_ANGLE, MONSTER_WAYPOINTS, ORDERLY_WAYPOINTS;
 
 // seeded PRNG so a Daily Challenge run can hand everyone the exact same item layout for the day
 function mulberry32(seed){
@@ -1094,6 +1099,20 @@ function setupItemsLayout(){
     const pt = randomSpotInRoom(roomName, avoid);
     avoid.push(pt);
     return {...pt, id:'stun'+i, room:roomName, taken:false};
+  });
+
+  const pepperRooms = shuffle(KEY_CANDIDATE_ROOMS).slice(0,2);
+  PEPPERITEMS = pepperRooms.map((roomName,i)=>{
+    const pt = randomSpotInRoom(roomName, avoid);
+    avoid.push(pt);
+    return {...pt, id:'pepper'+i, room:roomName, taken:false};
+  });
+
+  const noiseRooms = shuffle(KEY_CANDIDATE_ROOMS).slice(0,2);
+  NOISEITEMS = noiseRooms.map((roomName,i)=>{
+    const pt = randomSpotInRoom(roomName, avoid);
+    avoid.push(pt);
+    return {...pt, id:'noise'+i, room:roomName, taken:false};
   });
 
   EXIT_PX = P(14,17);
@@ -1315,11 +1334,16 @@ function buildSaveData(){
     hunted: state.hunted, elapsed: state.elapsed,
     flashlightOn: state.flashlightOn, lastRoomId: state.lastRoomId,
     hasStunGun: state.hasStunGun, stunCharges: state.stunCharges,
+    hasPepperSpray: state.hasPepperSpray, pepperCharges: state.pepperCharges,
+    hasNoisemaker: state.hasNoisemaker, noisemakerCharges: state.noisemakerCharges,
+    activeWeapon: state.activeWeapon,
     keys: KEYS.map(k=>({id:k.id, x:k.x, y:k.y, room:k.room, taken:k.taken})),
     notes: NOTES.map(n=>({id:n.id, taken:n.taken})),
     tapes: TAPES.map(t=>({id:t.id, taken:t.taken})),
     hidespots: HIDESPOTS.map(h=>({id:h.id, x:h.x, y:h.y, room:h.room})),
     stunitems: STUNITEMS.map(s=>({id:s.id, x:s.x, y:s.y, room:s.room, taken:s.taken})),
+    pepperitems: PEPPERITEMS.map(s=>({id:s.id, x:s.x, y:s.y, room:s.room, taken:s.taken})),
+    noiseitems: NOISEITEMS.map(s=>({id:s.id, x:s.x, y:s.y, room:s.room, taken:s.taken})),
     furniture: FURNITURE.map(f=>({x:f.x, y:f.y, type:f.type, room:f.room, searchable:f.searchable, searched:f.searched})),
     orderly: state.orderly ? {x:state.orderly.x, y:state.orderly.y, mode:state.orderly.mode, waypointIdx:state.orderly.waypointIdx} : null,
     savedAt: Date.now(),
@@ -1375,7 +1399,15 @@ const state = {
   powerOutageT:0,
   stunCharges:0,
   hasStunGun:false,
+  pepperCharges:0,
+  hasPepperSpray:false,
+  noisemakerCharges:0,
+  hasNoisemaker:false,
+  activeWeapon:'stungun',
   stunGunCooldown:0,
+  distractionT:0,
+  distractionX:0,
+  distractionY:0,
   usedCheatsThisRun:false,
   lastRoomId:-1,
   visitedRooms:{},
@@ -1434,6 +1466,12 @@ function resetGameState(){
   state.orderly = null;
   state.stunCharges = 0;
   state.hasStunGun = false;
+  state.pepperCharges = 0;
+  state.hasPepperSpray = false;
+  state.noisemakerCharges = 0;
+  state.hasNoisemaker = false;
+  state.activeWeapon = 'stungun';
+  state.distractionT = 0;
   state.usedCheatsThisRun = false;
   state.stunGunCooldown = 0;
   state.lastRoomId = -1;
@@ -1580,6 +1618,11 @@ function continueGame(){
   state.lastRoomId = (typeof save.lastRoomId==='number') ? save.lastRoomId : -1;
   state.hasStunGun = !!save.hasStunGun;
   state.stunCharges = save.stunCharges || 0;
+  state.hasPepperSpray = !!save.hasPepperSpray;
+  state.pepperCharges = save.pepperCharges || 0;
+  state.hasNoisemaker = !!save.hasNoisemaker;
+  state.noisemakerCharges = save.noisemakerCharges || 0;
+  state.activeWeapon = save.activeWeapon || 'stungun';
 
   if(Array.isArray(save.keys)) KEYS = save.keys.map(k=>({...k}));
   if(Array.isArray(save.hidespots)) HIDESPOTS = save.hidespots.map(h=>({...h, occupied:false}));
@@ -1590,6 +1633,8 @@ function continueGame(){
     save.tapes.forEach(st=>{ const t = TAPES.find(x=>x.id===st.id); if(t) t.taken = st.taken; });
   }
   if(Array.isArray(save.stunitems)) STUNITEMS = save.stunitems.map(s=>({...s}));
+  if(Array.isArray(save.pepperitems)) PEPPERITEMS = save.pepperitems.map(s=>({...s}));
+  if(Array.isArray(save.noiseitems)) NOISEITEMS = save.noiseitems.map(s=>({...s}));
   if(Array.isArray(save.furniture) && save.furniture.length===FURNITURE.length){
     FURNITURE.forEach((f,i)=>{ f.searched = !!save.furniture[i].searched; });
   }
@@ -1923,6 +1968,9 @@ window.addEventListener('keydown', (e)=>{
   if(e.code==='KeyQ'){ useAbility(); }
   if(e.code==='KeyE'){ toggleHide(); }
   if(e.code==='KeyM'){ state.minimapOn = !state.minimapOn; }
+  if(e.code==='Digit1' && state.hasStunGun){ state.activeWeapon='stungun'; showHint('Stun Gun readied.',1200); }
+  if(e.code==='Digit2' && state.hasPepperSpray){ state.activeWeapon='pepperspray'; showHint('Pepper Spray readied.',1200); }
+  if(e.code==='Digit3' && state.hasNoisemaker){ state.activeWeapon='noisemaker'; showHint('Noisemaker readied.',1200); }
 });
 window.addEventListener('keyup', (e)=> state.keys.delete(e.code));
 
@@ -2318,6 +2366,7 @@ function update(dt){
     state.powerOutageT -= dt;
     if(state.powerOutageT<=0){ state.powerOutageT=0; Audio_.powerUp(); showHint('The lights stutter back on.', 2200); }
   }
+  if(state.distractionT>0) state.distractionT -= dt;
 
   // ---- item pickups ----
   KEYS.forEach(k=>{
@@ -2365,8 +2414,34 @@ function update(dt){
       state.stunCharges++;
       Audio_.pickupChime();
       showHint(firstTime
-        ? `You found a stun gun! (${state.stunCharges} dart${state.stunCharges>1?'s':''}) Aim at her and left-click or hold R.`
+        ? `You found a stun gun! (${state.stunCharges} dart${state.stunCharges>1?'s':''}) Press 1 to ready it, aim and left-click or hold R.`
         : `Tranquilizer dart picked up. (${state.stunCharges} total)`, 3600);
+      saveRunState();
+    }
+  });
+  PEPPERITEMS.forEach(s=>{
+    if(!s.taken && Math.hypot(p.x-s.x,p.y-s.y)<22){
+      s.taken=true;
+      const firstTime = !state.hasPepperSpray;
+      state.hasPepperSpray = true;
+      state.pepperCharges += 3;
+      Audio_.pickupChime();
+      showHint(firstTime
+        ? `You found pepper spray! (${state.pepperCharges} uses) Short range but forgiving — press 2 to ready it.`
+        : `Pepper spray refill. (${state.pepperCharges} uses total)`, 3600);
+      saveRunState();
+    }
+  });
+  NOISEITEMS.forEach(s=>{
+    if(!s.taken && Math.hypot(p.x-s.x,p.y-s.y)<22){
+      s.taken=true;
+      const firstTime = !state.hasNoisemaker;
+      state.hasNoisemaker = true;
+      state.noisemakerCharges++;
+      Audio_.pickupChime();
+      showHint(firstTime
+        ? `You found a noisemaker! (${state.noisemakerCharges}) Throw it to lure her — and anything listening — somewhere else. Press 3 to ready it.`
+        : `Noisemaker picked up. (${state.noisemakerCharges} total)`, 3600);
       saveRunState();
     }
   });
@@ -2462,21 +2537,45 @@ function fireWeapon(weaponId){
   }
 }
 
-const STUN_GUN = {range:460, tol:0.13};
+const REGULAR_WEAPONS = {
+  stungun:     {label:'Stun Gun',     range:460, tol:0.13, stunDuration:5, cooldown:1.1, thrown:false},
+  pepperspray: {label:'Pepper Spray', range:110, tol:0.55, stunDuration:3, cooldown:0.45, thrown:false},
+};
+const NOISEMAKER_RANGE = 320;
 
-function fireStunGun(){
-  state.stunGunCooldown = 1.1;
-  state.stunCharges--;
+function fireRegularWeapon(id){
+  const w = REGULAR_WEAPONS[id];
+  state.stunGunCooldown = w.cooldown;
+  if(id==='stungun') state.stunCharges--; else state.pepperCharges--;
   state.muzzleFlashT = 0.12;
   state.weaponKickT = 0.18;
-  const hit = tryWeaponHit(STUN_GUN);
+  const hit = tryWeaponHit(w);
   Audio_.weaponFire('hitscan', 0.35, hit);
   if(hit && state.monster.mode!=='defeated'){
     state.monster.mode='retreat';
-    state.monster.retreatT = state.hardMode ? 5/3 : 5;
-    showHint('Tranquilizer hit — she staggers back, stunned!', 2600);
+    state.monster.retreatT = state.hardMode ? w.stunDuration/3 : w.stunDuration;
+    showHint(`${w.label} hits — she staggers back, stunned!`, 2600);
   } else {
     showHint('Missed...', 1200);
+  }
+  saveRunState();
+}
+function fireNoisemaker(){
+  state.stunGunCooldown = 0.6;
+  state.noisemakerCharges--;
+  state.muzzleFlashT = 0.12;
+  state.weaponKickT = 0.18;
+  const p = state.player;
+  const hit = castRay(p.x, p.y, p.angle);
+  const dist = Math.min(hit.dist, NOISEMAKER_RANGE);
+  const tx = p.x + Math.cos(p.angle)*dist, ty = p.y + Math.sin(p.angle)*dist;
+  state.distractionT = 8;
+  state.distractionX = tx; state.distractionY = ty;
+  Audio_.noiseBurstThrow();
+  showHint('You throw it — it clatters loudly across the floor, drawing her off.', 2600);
+  if(state.orderly && Math.hypot(state.orderly.x-tx, state.orderly.y-ty) < ORDERLY_HEAR_RADIUS){
+    state.orderly.lastHeardX = tx; state.orderly.lastHeardY = ty;
+    state.orderly.mode = 'hunt'; state.orderly.idleWaitT = 0;
   }
   saveRunState();
 }
@@ -2503,14 +2602,24 @@ function updateWeapon(dt){
     return;
   }
 
-  // the player's own found weapon — available in normal play, no dev mode needed
-  if(!firing || !state.hasStunGun || state.stunGunCooldown>0) return;
-  if(state.stunCharges<=0){
-    state.stunGunCooldown = 0.5;
-    showHint("Out of tranquilizer darts.", 1400);
+  // the player's own found weapons — available in normal play, no dev mode needed
+  if(!firing || state.stunGunCooldown>0) return;
+  const active = state.activeWeapon;
+  if(active==='noisemaker'){
+    if(!state.hasNoisemaker) return;
+    if(state.noisemakerCharges<=0){ state.stunGunCooldown = 0.5; showHint("No noisemakers left.", 1400); return; }
+    fireNoisemaker();
     return;
   }
-  fireStunGun();
+  const held = active==='pepperspray' ? state.hasPepperSpray : state.hasStunGun;
+  if(!held) return;
+  const charges = active==='pepperspray' ? state.pepperCharges : state.stunCharges;
+  if(charges<=0){
+    state.stunGunCooldown = 0.5;
+    showHint(active==='pepperspray' ? "Out of pepper spray." : "Out of tranquilizer darts.", 1400);
+    return;
+  }
+  fireRegularWeapon(active);
 }
 
 function bfsPath(sx,sy,tx,ty){
@@ -2587,6 +2696,8 @@ function updateMonster(m,p,dt,c,hidden){
     if(m.lastKnownX===undefined){ m.lastKnownX=p.x; m.lastKnownY=p.y; }
     targetX = m.lastKnownX; targetY = m.lastKnownY;
     if(Math.hypot(m.x-targetX,m.y-targetY) < 24) return; // waiting nearby
+  } else if(state.distractionT>0){
+    targetX = state.distractionX; targetY = state.distractionY;
   } else {
     m.lastKnownX = p.x; m.lastKnownY = p.y;
     targetX = p.x; targetY = p.y;
@@ -2760,9 +2871,13 @@ function updateHUD(){
   el('batteryBar').firstElementChild.style.width = state.battery+'%';
   el('staminaBar').firstElementChild.style.width = state.stamina+'%';
   el('keysLine').textContent = `KEYS: ${state.keysCollected} / 3`;
-  if(state.hasStunGun){
+  const weaponBits = [];
+  if(state.hasStunGun) weaponBits.push(`${state.activeWeapon==='stungun'?'▶':''}[1] Stun Gun: ${state.stunCharges}`);
+  if(state.hasPepperSpray) weaponBits.push(`${state.activeWeapon==='pepperspray'?'▶':''}[2] Pepper Spray: ${state.pepperCharges}`);
+  if(state.hasNoisemaker) weaponBits.push(`${state.activeWeapon==='noisemaker'?'▶':''}[3] Noisemaker: ${state.noisemakerCharges}`);
+  if(weaponBits.length){
     el('stunLine').classList.remove('hidden');
-    el('stunLine').textContent = `STUN GUN: ${state.stunCharges} dart${state.stunCharges===1?'':'s'}`;
+    el('stunLine').textContent = weaponBits.join('   ');
   } else {
     el('stunLine').classList.add('hidden');
   }
@@ -2982,6 +3097,16 @@ const stunTex = makeSpriteTex(48,(c)=>{
   c.fillStyle='#3a3a3a'; c.fillRect(-13,-4,18,7); c.fillRect(-5,3,8,9);
   c.fillStyle='#5ec7d9'; c.fillRect(7,-5,6,9);
 });
+const pepperTex = makeSpriteTex(48,(c)=>{
+  c.shadowColor='#e8c84a'; c.shadowBlur=8;
+  c.fillStyle='#2a2a26'; c.fillRect(-6,-10,12,18);
+  c.fillStyle='#e8c84a'; c.fillRect(-3,-16,6,7);
+});
+const noiseTex = makeSpriteTex(48,(c)=>{
+  c.shadowColor='#e05a4a'; c.shadowBlur=8;
+  c.fillStyle='#2a2420'; c.fillRect(-9,-8,18,14);
+  c.fillStyle='#e05a4a'; c.beginPath(); c.arc(0,-11,6,0,Math.PI*2); c.fill();
+});
 const tapeTex = makeSpriteTex(48,(c)=>{
   c.shadowColor='#c98a3a'; c.shadowBlur=6;
   c.fillStyle='#2a221a'; c.fillRect(-12,-8,24,16);
@@ -3143,7 +3268,7 @@ function drawOrderlyCanvas(hunting){
   c.restore();
 }
 
-let keySprites=[], noteSprites=[], tapeSprites=[], stunSprites=[], hideSprites=[], exitSprite=null, monsterSprite=null, orderlySprite=null;
+let keySprites=[], noteSprites=[], tapeSprites=[], stunSprites=[], pepperSprites=[], noiseSprites=[], hideSprites=[], exitSprite=null, monsterSprite=null, orderlySprite=null;
 function build3DItems(){
   // setupItems() re-randomizes KEYS/NOTES/STUNITEMS/HIDESPOTS/EXIT_PX on every new game (resetGameState -> setupItems),
   // so the sprites built from the previous layout must be torn down or they'd go stale and silently desync from pickup checks
@@ -3151,12 +3276,16 @@ function build3DItems(){
   noteSprites.forEach(s=>scene.remove(s));
   tapeSprites.forEach(s=>scene.remove(s));
   stunSprites.forEach(s=>scene.remove(s));
+  pepperSprites.forEach(s=>scene.remove(s));
+  noiseSprites.forEach(s=>scene.remove(s));
   hideSprites.forEach(s=>scene.remove(s));
 
   keySprites = KEYS.map(k=>{ const s=makeSprite(keyTex,22); s.position.set(k.x,EYE_HEIGHT,k.y); scene.add(s); return s; });
   noteSprites = NOTES.map(n=>{ const s=makeSprite(noteTex,18); s.position.set(n.x,EYE_HEIGHT,n.y); scene.add(s); return s; });
   tapeSprites = TAPES.map(t=>{ const s=makeSprite(tapeTex,16); s.position.set(t.x,EYE_HEIGHT,t.y); scene.add(s); return s; });
   stunSprites = STUNITEMS.map(st=>{ const s=makeSprite(stunTex,18); s.position.set(st.x,EYE_HEIGHT,st.y); scene.add(s); return s; });
+  pepperSprites = PEPPERITEMS.map(st=>{ const s=makeSprite(pepperTex,16); s.position.set(st.x,EYE_HEIGHT,st.y); scene.add(s); return s; });
+  noiseSprites = NOISEITEMS.map(st=>{ const s=makeSprite(noiseTex,16); s.position.set(st.x,EYE_HEIGHT,st.y); scene.add(s); return s; });
   hideSprites = HIDESPOTS.map(h=>{ const s=makeSprite(hideTexFar,30); s.position.set(h.x,EYE_HEIGHT,h.y); s.userData.near=false; scene.add(s); return s; });
 
   if(!exitSprite){ exitSprite = makeSprite(exitTex,40); scene.add(exitSprite); }
@@ -3206,6 +3335,8 @@ function update3DScene(){
   NOTES.forEach((n,i)=>{ if(noteSprites[i]) noteSprites[i].visible = !n.taken; });
   TAPES.forEach((t,i)=>{ if(tapeSprites[i]) tapeSprites[i].visible = !t.taken; });
   STUNITEMS.forEach((st,i)=>{ if(stunSprites[i]) stunSprites[i].visible = !st.taken; });
+  PEPPERITEMS.forEach((st,i)=>{ if(pepperSprites[i]) pepperSprites[i].visible = !st.taken; });
+  NOISEITEMS.forEach((st,i)=>{ if(noiseSprites[i]) noiseSprites[i].visible = !st.taken; });
   HIDESPOTS.forEach((h,i)=>{
     const s = hideSprites[i]; if(!s) return;
     const nearThis = state.nearHideSpot===h;
@@ -3321,27 +3452,41 @@ function drawWeaponViewmodel(){
   ctx.restore();
 }
 
-function drawStunGunViewmodel(){
-  if(!state.hasStunGun || state.hiding) return;
+function drawRegularWeaponViewmodel(){
+  if(state.hiding) return;
   if(!devCheatsBlocked() && state.cheats.weapon && state.cheats.weapon!=='none') return; // dev weapon takes over the hands
+  const active = state.activeWeapon;
+  const held = active==='stungun' ? state.hasStunGun : active==='pepperspray' ? state.hasPepperSpray : active==='noisemaker' ? state.hasNoisemaker : false;
+  if(!held) return;
+
   const kick = state.weaponKickT>0 ? (state.weaponKickT/0.18)*14 : 0;
   const bob = Math.sin(performance.now()/220)*4;
   ctx.save();
   ctx.translate(SCREEN_W/2, SCREEN_H-14+bob+kick);
-  ctx.fillStyle = '#1a1512';
-  ctx.fillRect(-18,-100,36,100);
-  ctx.fillStyle = '#3a3a3a';
-  ctx.fillRect(-14,-128,28,22);
-  ctx.fillStyle = state.stunCharges>0 ? '#5ec7d9' : '#555';
-  ctx.shadowColor = '#5ec7d9'; ctx.shadowBlur = state.stunCharges>0 ? 10 : 0;
-  ctx.fillRect(6,-134,8,12);
+  if(active==='stungun'){
+    ctx.fillStyle = '#1a1512'; ctx.fillRect(-18,-100,36,100);
+    ctx.fillStyle = '#3a3a3a'; ctx.fillRect(-14,-128,28,22);
+    ctx.fillStyle = state.stunCharges>0 ? '#5ec7d9' : '#555';
+    ctx.shadowColor = '#5ec7d9'; ctx.shadowBlur = state.stunCharges>0 ? 10 : 0;
+    ctx.fillRect(6,-134,8,12);
+  } else if(active==='pepperspray'){
+    ctx.fillStyle = '#2a2a26'; ctx.fillRect(-10,-90,20,70);
+    ctx.fillStyle = state.pepperCharges>0 ? '#e8c84a' : '#555';
+    ctx.shadowColor = '#e8c84a'; ctx.shadowBlur = state.pepperCharges>0 ? 8 : 0;
+    ctx.fillRect(-6,-104,12,16);
+  } else if(active==='noisemaker'){
+    ctx.fillStyle = '#2a2420'; ctx.fillRect(-14,-80,28,60);
+    ctx.fillStyle = state.noisemakerCharges>0 ? '#e05a4a' : '#555';
+    ctx.shadowColor = '#e05a4a'; ctx.shadowBlur = state.noisemakerCharges>0 ? 8 : 0;
+    ctx.beginPath(); ctx.arc(0,-92,10,0,Math.PI*2); ctx.fill();
+  }
   ctx.restore();
 
   if(state.muzzleFlashT>0 && (devCheatsBlocked() || !state.cheats.weapon || state.cheats.weapon==='none')){
     const a = state.muzzleFlashT/0.12;
     ctx.save();
     ctx.globalAlpha = a;
-    ctx.fillStyle = '#bfefff';
+    ctx.fillStyle = active==='noisemaker' ? '#ffb199' : (active==='pepperspray' ? '#fff3bf' : '#bfefff');
     ctx.beginPath(); ctx.arc(SCREEN_W/2, SCREEN_H-140, 8+14*(1-a), 0, Math.PI*2); ctx.fill();
     ctx.restore();
   }
@@ -3352,7 +3497,10 @@ function drawStunGunViewmodel(){
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   ctx.fillRect(SCREEN_W/2-110, 8, 220, 20);
   ctx.fillStyle = '#bfefff';
-  ctx.fillText(`Stun Gun — ${state.stunCharges} dart${state.stunCharges===1?'':'s'}`, SCREEN_W/2, 22);
+  const label = active==='noisemaker' ? 'Noisemaker' : REGULAR_WEAPONS[active].label;
+  const charges = active==='stungun' ? state.stunCharges : active==='pepperspray' ? state.pepperCharges : state.noisemakerCharges;
+  const unit = active==='noisemaker' ? 'left' : (active==='stungun' ? `dart${charges===1?'':'s'}` : `use${charges===1?'':'s'}`);
+  ctx.fillText(`${label} — ${charges} ${unit}`, SCREEN_W/2, 22);
   ctx.textAlign = 'left';
   ctx.restore();
 }
@@ -3410,7 +3558,7 @@ function render(){
   drawIntuitionCompass();
   drawViewmodel();
   drawWeaponViewmodel();
-  drawStunGunViewmodel();
+  drawRegularWeaponViewmodel();
   if(state.minimapOn) drawMinimap();
   if(!devCheatsBlocked() && state.cheats.debugInfo) drawDebugInfo();
 }
