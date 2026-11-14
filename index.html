@@ -428,6 +428,10 @@
         <h3 style="color:#e05a4a;">Hard</h3>
         <div id="lbHard"></div>
       </div>
+      <div class="settingsPanel" style="width:260px; border-color:#5ec7d9;">
+        <h3 style="color:#5ec7d9;">Daily Challenge</h3>
+        <div id="lbDaily"></div>
+      </div>
     </div>
     <button class="spooky" id="btnLeaderboardBack" style="margin-top:20px;">Back</button>
   </div>
@@ -439,6 +443,7 @@
     <div id="charGrid"></div>
     <label id="nightmareToggle"><input type="checkbox" id="chkNightmare"> Nightmare Mode — faster, sharper-eyed, less battery to start</label>
     <label id="hardToggle"><input type="checkbox" id="chkHardMode"> Hard Mode — everything is three times as brutal, no Developer Mode</label>
+    <label id="dailyToggle"><input type="checkbox" id="chkDaily"> Daily Challenge — same layout for everyone today, normal difficulty, no Developer Mode</label>
   </div>
 
   <!-- SETTINGS -->
@@ -480,7 +485,7 @@
       </div>
       <div id="devUnlocked" class="hidden">
         <div class="settingsMsg ok">Developer Mode unlocked.</div>
-        <div class="settingsMsg" id="devHardModeWarning" style="display:none; color:#e05a4a;">Hard Mode is active — all Developer Mode cheats are disabled for this run.</div>
+        <div class="settingsMsg" id="devHardModeWarning" style="display:none; color:#e05a4a;">Hard Mode or Daily Challenge is active — all Developer Mode cheats are disabled for this run.</div>
         <div id="devMenu">
           <div class="devSection">Player</div>
           <label><input type="checkbox" id="chkGod"> God Mode (no damage)</label>
@@ -800,6 +805,20 @@ const Audio_ = (function(){
     tone(660,0.12,'sine',0.25,0);
     tone(880,0.18,'sine',0.2,0.08);
   }
+  function tapePlay(){
+    tone(1200,0.04,'square',0.18,0); // button click
+    noiseBurst(0.4,0.14,2600,0.06);  // tape hiss
+    tone(340,0.08,'triangle',0.15,0.42); // playback click-off
+  }
+  function powerDown(){
+    tone(180,0.5,'sawtooth',0.3,0,20);
+    noiseBurst(0.3,0.3,900,0.04);
+  }
+  function powerUp(){
+    tone(90,0.12,'square',0.2,0);
+    tone(90,0.08,'square',0.15,0.18);
+    tone(300,0.3,'sine',0.2,0.3);
+  }
   function keyChime(){
     tone(520,0.1,'triangle',0.3,0);
     tone(780,0.15,'triangle',0.25,0.07);
@@ -857,7 +876,7 @@ const Audio_ = (function(){
   }
   function stopHeartbeat(){ if(hbTimer){ clearInterval(hbTimer); hbTimer=null; hbInterval=null; } }
 
-  return { ensure, jumpscareSting, preScareCue, pickupChime, keyChime, unlockChime, loseSting, winChime,
+  return { ensure, jumpscareSting, preScareCue, pickupChime, tapePlay, powerDown, powerUp, keyChime, unlockChime, loseSting, winChime,
            startDrone, stopDrone, setDroneIntensity, footstep, startHeartbeat, stopHeartbeat,
            distantBang, distantWhisper, doorCreak, monsterGrowl, weaponFire, monsterDefeated, setMuted, isMuted };
 })();
@@ -865,7 +884,7 @@ const Audio_ = (function(){
 /* =========================================================
    MAP DATA
 ========================================================= */
-const TILE = 32, MAPW = 30, MAPH = 20;
+const TILE = 32, MAPW = 38, MAPH = 20;
 const WALL='#', FLOOR='.', DOOR='+', EXIT='=';
 
 const ROOMS = [
@@ -878,9 +897,13 @@ const ROOMS = [
   {name:"Supply Closet",    x:2, y:16,w:5, h:3, color:"#20181c"},
   {name:"Front Hall",       x:11,y:16,w:8, h:3, color:"#262016"},
   {name:"Matron's Office",  x:20,y:16,w:7, h:3, color:"#261616"},
+  {name:"Records Room",     x:29,y:2, w:6, h:5, color:"#1e1c14"},
+  {name:"Generator Room",   x:29,y:9, w:7, h:5, color:"#15170f"},
+  {name:"Basement Stairwell", x:29,y:16,w:6, h:3, color:"#101010"},
 ];
 const SCARE_ROOMS = {
-  "Morgue":"morgue", "Portrait Gallery":"gallery", "Supply Closet":"closet", "Matron's Office":"office"
+  "Morgue":"morgue", "Portrait Gallery":"gallery", "Supply Closet":"closet", "Matron's Office":"office",
+  "Generator Room":"generator"
 };
 
 let grid=[], roomIdGrid=[];
@@ -912,8 +935,16 @@ function generateMap(){
   carveH(17,7,10);   // Closet - Front Hall
   carveH(17,19,19);  // Front Hall - Office
 
+  // east wing
+  carveH(4,27,28);   // Gallery - Records
+  carveH(11,27,28);  // Morgue - Generator
+  carveH(17,27,28);  // Office - Basement Stairwell
+  carveV(32,7,8);    // Records - Generator
+  carveV(32,14,15);  // Generator - Basement Stairwell
+
   // doors (cosmetic, walkable)
-  [[7,3],[16,4],[4,7],[13,7],[23,7],[9,11],[18,11],[4,15],[14,14],[23,15],[8,17],[19,17]].forEach(([x,y])=>{
+  [[7,3],[16,4],[4,7],[13,7],[23,7],[9,11],[18,11],[4,15],[14,14],[23,15],[8,17],[19,17],
+   [27,4],[27,11],[27,17],[32,7],[32,15]].forEach(([x,y])=>{
     if(grid[y][x]===FLOOR) grid[y][x]=DOOR;
   });
 
@@ -928,7 +959,28 @@ function roomIdAtPx(px,py){ const r=roomIdGrid[Math.floor(py/TILE)]; return r? r
 
 /* Items */
 function P(tx,ty){ return {x:tx*TILE+TILE/2, y:ty*TILE+TILE/2}; }
-let KEYS, NOTES, HIDESPOTS, STUNITEMS, FURNITURE, EXIT_PX, START_PX, START_ANGLE, MONSTER_WAYPOINTS;
+let KEYS, NOTES, TAPES, HIDESPOTS, STUNITEMS, FURNITURE, EXIT_PX, START_PX, START_ANGLE, MONSTER_WAYPOINTS, ORDERLY_WAYPOINTS;
+
+// seeded PRNG so a Daily Challenge run can hand everyone the exact same item layout for the day
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function todaysDayString(){
+  const d = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function todaysSeed(){
+  const key = todaysDayString();
+  let h = 0;
+  for(let i=0;i<key.length;i++){ h = (Math.imul(31,h) + key.charCodeAt(i))|0; }
+  return h;
+}
 
 function shuffle(arr){
   const a = arr.slice();
@@ -975,9 +1027,20 @@ function edgeSpotInRoom(roomName, avoid){
   return best || P(room.x+1,room.y+1);
 }
 
-const KEY_CANDIDATE_ROOMS = ["Library","Portrait Gallery","Patient Ward","Kitchen","Morgue","Supply Closet","Matron's Office"];
+const KEY_CANDIDATE_ROOMS = ["Library","Portrait Gallery","Patient Ward","Kitchen","Morgue","Supply Closet","Matron's Office","Records Room","Generator Room"];
 
 function setupItems(){
+  // Daily Challenge: swap in a seeded RNG for the duration of layout generation so every
+  // player gets the exact same key/note/tape/hidespot/furniture placement for the day.
+  const realRandom = Math.random;
+  if(state.dailyChallenge){ Math.random = mulberry32(todaysSeed()); }
+  try{
+    setupItemsLayout();
+  } finally {
+    Math.random = realRandom;
+  }
+}
+function setupItemsLayout(){
   NOTES = [
     {...P(5,4),  id:0, room:"Entrance Foyer", taken:false,
       title:"Admission Ledger",
@@ -994,9 +1057,24 @@ function setupItems(){
     {...P(24,17),id:4, room:"Matron's Office", taken:false,
       title:"Unsigned Memo",
       text:"Typed, pinned above an empty desk: 'EFFECTIVE IMMEDIATELY: HEAD NURSE VOSS IS RELIEVED OF DUTY.' Beneath it, in another hand, over and over: 'SHE DIDN'T LEAVE. SHE DIDN'T LEAVE. SHE DIDN'T LEAVE.'"},
+    {...P(31,4), id:5, room:"Records Room", taken:false,
+      title:"Transfer Log",
+      text:"'Patient C. Hollis, transferred out, 11/14.' The destination field is blank. Every other transfer that month lists a hospital. Someone has gone through this page with a razor and scraped three other entries down to bare paper."},
+    {...P(32,11),id:6, room:"Generator Room", taken:false,
+      title:"Maintenance Log",
+      text:"'Breaker keeps tripping on its own. Checked the wiring twice, nothing wrong with it. Wrote up a work order anyway so there's a record somewhere that says I looked.' The next line, different pen: 'She doesn't like the lights on down here.'"},
   ];
 
-  const avoid = NOTES.map(n=>({x:n.x,y:n.y}));
+  TAPES = [
+    {...P(12,4), id:0, room:"Library", taken:false,
+      title:"Micro-cassette — unlabeled",
+      text:"A woman's voice, young, trying to sound steady: 'If anyone finds this — I'm Patient 14. They said my sister got transferred. I don't believe them anymore. I'm hiding this in the books because nobody reads down here but me.' Three seconds of static. Click."},
+    {...P(31,17),id:1, room:"Basement Stairwell", taken:false,
+      title:"Micro-cassette — 'DO NOT FILE'",
+      text:"A man's voice, out of breath: 'Nurse Voss's personnel file — there isn't one. No hire date, no references, nothing before the fire. Dr. Kane signed off on her anyway.' A long pause. Then, much closer to the microphone: 'Did you hear that counting?' The tape ends there."},
+  ];
+
+  const avoid = NOTES.map(n=>({x:n.x,y:n.y})).concat(TAPES.map(t=>({x:t.x,y:t.y})));
   const keyRooms = shuffle(KEY_CANDIDATE_ROOMS).slice(0,3);
   KEYS = keyRooms.map((roomName,i)=>{
     const pt = randomSpotInRoom(roomName, avoid);
@@ -1004,7 +1082,7 @@ function setupItems(){
     return {...pt, id:'key'+i, room:roomName, taken:false};
   });
 
-  const hideRooms = ["Patient Ward","Kitchen","Morgue","Matron's Office"];
+  const hideRooms = ["Patient Ward","Kitchen","Morgue","Matron's Office","Generator Room"];
   HIDESPOTS = hideRooms.map((roomName,i)=>{
     const pt = randomSpotInRoom(roomName, avoid);
     avoid.push(pt);
@@ -1021,7 +1099,8 @@ function setupItems(){
   EXIT_PX = P(14,17);
   START_PX = P(5,10);       // wake up in the Patient Ward, a comfortable distance from the bed...
   START_ANGLE = Math.PI;    // ...facing the bed you just got out of
-  MONSTER_WAYPOINTS = [P(24,10), P(23,4), P(14,10), P(23,17)];
+  MONSTER_WAYPOINTS = [P(24,10), P(23,4), P(14,10), P(23,17), P(32,11)];
+  ORDERLY_WAYPOINTS = [P(31,4), P(32,11), P(31,17), P(24,17), P(32,11)];
 
   const spawnBed = P(3,10);
   FURNITURE = [ {...spawnBed, type:'bed', room:"Patient Ward"} ];
@@ -1040,13 +1119,18 @@ function setupItems(){
     {room:"Front Hall", type:'wheelchair', count:1},
     {room:"Front Hall", type:'ivstand', count:1},
     {room:"Entrance Foyer", type:'ivstand', count:1},
+    {room:"Records Room", type:'cabinet', count:2},
+    {room:"Records Room", type:'desk', count:1},
+    {room:"Generator Room", type:'cart', count:1},
+    {room:"Generator Room", type:'cabinet', count:1},
   ];
+  const SEARCHABLE_TYPES = {cabinet:true, desk:true, cart:true};
   const furnAvoid = furnAvoid0.slice();
   FURNITURE_PLAN.forEach(plan=>{
     for(let i=0;i<plan.count;i++){
       const pt = edgeSpotInRoom(plan.room, furnAvoid);
       furnAvoid.push(pt);
-      FURNITURE.push({...pt, type:plan.type, room:plan.room});
+      FURNITURE.push({...pt, type:plan.type, room:plan.room, searchable:!!SEARCHABLE_TYPES[plan.type], searched:false});
     }
   });
 }
@@ -1226,15 +1310,18 @@ function buildSaveData(){
     hardMode: state.hardMode,
     player: {x:state.player.x, y:state.player.y, angle:state.player.angle},
     hearts: state.hearts, battery: state.battery, stamina: state.stamina,
-    keysCollected: state.keysCollected, notesCollected: state.notesCollected,
+    keysCollected: state.keysCollected, notesCollected: state.notesCollected, tapesCollected: state.tapesCollected,
     visitedRooms: state.visitedRooms, scaredRooms: state.scaredRooms,
     hunted: state.hunted, elapsed: state.elapsed,
     flashlightOn: state.flashlightOn, lastRoomId: state.lastRoomId,
     hasStunGun: state.hasStunGun, stunCharges: state.stunCharges,
     keys: KEYS.map(k=>({id:k.id, x:k.x, y:k.y, room:k.room, taken:k.taken})),
     notes: NOTES.map(n=>({id:n.id, taken:n.taken})),
+    tapes: TAPES.map(t=>({id:t.id, taken:t.taken})),
     hidespots: HIDESPOTS.map(h=>({id:h.id, x:h.x, y:h.y, room:h.room})),
     stunitems: STUNITEMS.map(s=>({id:s.id, x:s.x, y:s.y, room:s.room, taken:s.taken})),
+    furniture: FURNITURE.map(f=>({x:f.x, y:f.y, type:f.type, room:f.room, searchable:f.searchable, searched:f.searched})),
+    orderly: state.orderly ? {x:state.orderly.x, y:state.orderly.y, mode:state.orderly.mode, waypointIdx:state.orderly.waypointIdx} : null,
     savedAt: Date.now(),
   };
 }
@@ -1284,6 +1371,8 @@ const state = {
   monster:null,
   keysCollected:0,
   notesCollected:0,
+  tapesCollected:0,
+  powerOutageT:0,
   stunCharges:0,
   hasStunGun:false,
   stunGunCooldown:0,
@@ -1307,6 +1396,11 @@ const state = {
   keys:new Set(),
   hiding:false,
   nearHideSpot:null,
+  nearSearchable:null,
+  isSprinting:false,
+  noiseAlertCooldown:0,
+  orderly:null,
+  dailyChallenge:false,
   nightmare:false,
   hardMode:false,
   elapsed:0,
@@ -1335,6 +1429,9 @@ function resetGameState(){
     health:100, defeatedT:0 };
   state.keysCollected = 0;
   state.notesCollected = 0;
+  state.tapesCollected = 0;
+  state.powerOutageT = 0;
+  state.orderly = null;
   state.stunCharges = 0;
   state.hasStunGun = false;
   state.usedCheatsThisRun = false;
@@ -1403,8 +1500,9 @@ function updateBestTimeLine(){
   el('bestTimeLine').textContent = best===null ? '' : `Fastest escape${who}: ${formatTime(best)}`;
 }
 
-el('chkNightmare').addEventListener('change', ()=>{ if(el('chkNightmare').checked) el('chkHardMode').checked = false; });
-el('chkHardMode').addEventListener('change', ()=>{ if(el('chkHardMode').checked) el('chkNightmare').checked = false; });
+el('chkNightmare').addEventListener('change', ()=>{ if(el('chkNightmare').checked){ el('chkHardMode').checked=false; el('chkDaily').checked=false; } });
+el('chkHardMode').addEventListener('change', ()=>{ if(el('chkHardMode').checked){ el('chkNightmare').checked=false; el('chkDaily').checked=false; } });
+el('chkDaily').addEventListener('change', ()=>{ if(el('chkDaily').checked){ el('chkNightmare').checked=false; el('chkHardMode').checked=false; } });
 
 function buildCharSelect(){
   const grid = el('charGrid');
@@ -1414,8 +1512,9 @@ function buildCharSelect(){
     card.className='charCard';
     card.innerHTML = `<h3>${c.name}</h3><div class="role">${c.role}</div><p>${c.bio}</p><div class="ability"><b>Ability:</b> ${c.ability}</div>`;
     card.addEventListener('click', ()=>{
-      state.nightmare = !!el('chkNightmare').checked;
-      state.hardMode = !!el('chkHardMode').checked;
+      state.dailyChallenge = !!el('chkDaily').checked;
+      state.nightmare = state.dailyChallenge ? false : !!el('chkNightmare').checked;
+      state.hardMode = state.dailyChallenge ? false : !!el('chkHardMode').checked;
       startGame(c);
     });
     grid.appendChild(card);
@@ -1472,6 +1571,7 @@ function continueGame(){
   state.stamina = save.stamina;
   state.keysCollected = save.keysCollected;
   state.notesCollected = save.notesCollected;
+  state.tapesCollected = save.tapesCollected || 0;
   state.visitedRooms = save.visitedRooms || {};
   state.scaredRooms = save.scaredRooms || {};
   state.hunted = !!save.hunted;
@@ -1486,7 +1586,14 @@ function continueGame(){
   if(Array.isArray(save.notes)){
     save.notes.forEach(sn=>{ const n = NOTES.find(x=>x.id===sn.id); if(n) n.taken = sn.taken; });
   }
+  if(Array.isArray(save.tapes)){
+    save.tapes.forEach(st=>{ const t = TAPES.find(x=>x.id===st.id); if(t) t.taken = st.taken; });
+  }
   if(Array.isArray(save.stunitems)) STUNITEMS = save.stunitems.map(s=>({...s}));
+  if(Array.isArray(save.furniture) && save.furniture.length===FURNITURE.length){
+    FURNITURE.forEach((f,i)=>{ f.searched = !!save.furniture[i].searched; });
+  }
+  state.orderly = save.orderly ? {x:save.orderly.x, y:save.orderly.y, r:13, mode:save.orderly.mode||'idle', waypointIdx:save.orderly.waypointIdx||0, idleWaitT:0} : null;
   build3DItems(); // KEYS/HIDESPOTS/STUNITEMS were just swapped for the saved layout — resync their 3D sprites
 
   state.screen='playing';
@@ -1601,6 +1708,7 @@ async function openLeaderboard(){
   el('lbNormal').innerHTML = '';
   el('lbNightmare').innerHTML = '';
   el('lbHard').innerHTML = '';
+  el('lbDaily').innerHTML = '';
   try{
     const res = await fetch('/api/leaderboard');
     if(!res.ok) throw new Error('bad response');
@@ -1608,12 +1716,14 @@ async function openLeaderboard(){
     renderLbList('lbNormal', data.normal);
     renderLbList('lbNightmare', data.nightmare);
     renderLbList('lbHard', data.hard);
+    renderLbList('lbDaily', data.daily);
     el('leaderboardStatus').textContent = '';
   }catch(e){
     el('leaderboardStatus').textContent = 'Leaderboard unavailable right now (needs the hosted site, not a local file).';
     renderLbList('lbNormal', []);
     renderLbList('lbNightmare', []);
     renderLbList('lbHard', []);
+    renderLbList('lbDaily', []);
   }
 }
 function closeLeaderboard(){
@@ -1623,10 +1733,12 @@ function closeLeaderboard(){
 }
 async function submitScore(time, mode, cheated){
   try{
+    const payload = { name: currentUsername()||'Guest', time, character: state.character.name, mode, cheated: !!cheated };
+    if(mode==='daily') payload.day = todaysDayString();
     await fetch('/api/leaderboard', {
       method:'POST',
       headers:{'content-type':'application/json'},
-      body: JSON.stringify({ name: currentUsername()||'Guest', time, character: state.character.name, mode, cheated: !!cheated })
+      body: JSON.stringify(payload)
     });
   }catch(e){ /* offline or local file — silently skip */ }
 }
@@ -1658,7 +1770,7 @@ function renderSettings(){
   el('devLocked').classList.toggle('hidden', devUnlocked);
   el('devUnlocked').classList.toggle('hidden', !devUnlocked);
   if(devUnlocked){
-    const blocked = state.screen==='playing' && state.hardMode;
+    const blocked = devToolsBlocked();
     el('devHardModeWarning').style.display = blocked ? '' : 'none';
     el('devMenu').style.opacity = blocked ? '0.4' : '1';
     el('devMenu').style.pointerEvents = blocked ? 'none' : 'auto';
@@ -1725,7 +1837,7 @@ el('chkRevealMap').addEventListener('change', e=> state.cheats.revealMap = e.tar
 el('chkForceHunted').addEventListener('change', e=> state.hunted = e.target.checked);
 el('chkDebugInfo').addEventListener('change', e=> state.cheats.debugInfo = e.target.checked);
 
-function devToolsBlocked(){ return state.screen==='playing' && state.hardMode; }
+function devToolsBlocked(){ return state.screen==='playing' && (state.hardMode || state.dailyChallenge); }
 el('btnCheatAllKeys').addEventListener('click', ()=>{
   if(state.screen==='playing' && !devToolsBlocked()){ KEYS.forEach(k=>k.taken=true); state.keysCollected = 3; }
 });
@@ -1781,6 +1893,14 @@ function renderJournal(){
       html += `<div class="entry"><b>${n.title}</b><br>${n.text}</div>`;
     } else {
       html += `<div class="entry locked">??? — undiscovered page, somewhere in the ${n.room}.</div>`;
+    }
+  });
+  html += `<h2 style="font-size:16px;">Audio Logs (${state.tapesCollected}/${TAPES.length})</h2>`;
+  TAPES.forEach(t=>{
+    if(t.taken){
+      html += `<div class="entry"><b>🎙 ${t.title}</b><br>${t.text}</div>`;
+    } else {
+      html += `<div class="entry locked">??? — undiscovered tape, somewhere in the ${t.room}.</div>`;
     }
   });
   html += `<div class="closeNote">Press J to close</div>`;
@@ -1860,7 +1980,27 @@ function toggleHide(){
     state.hideTimer = state.hardMode ? MAX_HIDE_TIME/3 : MAX_HIDE_TIME;
     el('hideOverlay').classList.add('on');
     showHint('', 1);
+  } else if(state.nearSearchable){
+    searchFurniture(state.nearSearchable);
   }
+}
+function searchFurniture(f){
+  f.searched = true;
+  Audio_.pickupChime();
+  const roll = Math.random();
+  if(roll<0.34){
+    state.battery = Math.min(100, state.battery+20);
+    showHint('You find a spare battery pack. (+20% battery)', 2400);
+  } else if(roll<0.6 && state.hasStunGun){
+    state.stunCharges++;
+    showHint('You find a tranquilizer dart. (+1 stun charge)', 2400);
+  } else if(roll<0.78){
+    state.stamina = 100;
+    showHint('You catch your breath rifling through the drawers. (stamina restored)', 2400);
+  } else {
+    showHint('Just old paperwork. Nothing useful.', 2000);
+  }
+  saveRunState();
 }
 
 /* =========================================================
@@ -1930,6 +2070,7 @@ const FACE_SVGS = [
 ];
 
 function isNormalMode(){ return !state.nightmare && !state.hardMode; }
+function devCheatsBlocked(){ return state.hardMode || state.dailyChallenge; }
 function triggerJumpscare(kind, opts){
   opts = opts || {};
   if(!opts.chained && state.jumpscareLock>0) return;
@@ -2013,6 +2154,11 @@ function showRoomName(name){
   if(roomPopupTimer) clearTimeout(roomPopupTimer);
   roomPopupTimer = setTimeout(()=> p.classList.remove('show'), 1800);
 }
+function triggerPowerOutage(){
+  state.powerOutageT = 26 + Math.random()*10;
+  Audio_.powerDown();
+  showHint('The lights just died. Your flashlight is the only thing you have now.', 3200);
+}
 
 /* =========================================================
    MOVEMENT / COLLISION
@@ -2072,11 +2218,18 @@ function update(dt){
 
   // ---- hiding: find nearby spot, handle hidden state ----
   state.nearHideSpot = null;
+  state.nearSearchable = null;
   if(!state.hiding){
     for(const h of HIDESPOTS){
       if(Math.hypot(p.x-h.x,p.y-h.y)<30){ state.nearHideSpot = h; break; }
     }
     if(state.nearHideSpot) showHint('Press E to hide', 900);
+    else{
+      for(const f of FURNITURE){
+        if(f.searchable && !f.searched && Math.hypot(p.x-f.x,p.y-f.y)<40){ state.nearSearchable = f; break; }
+      }
+      if(state.nearSearchable) showHint('Press E to search', 900);
+    }
   }
 
   if(state.hiding){
@@ -2093,6 +2246,7 @@ function update(dt){
         el('hideOverlay').querySelector('.label').textContent = 'HIDING — press E to come out';
       }
       updateMonster(m,p,dt,c,true);
+      if(state.orderly) updateOrderly(state.orderly,p,dt);
       const distHidden = Math.hypot(p.x-m.x,p.y-m.y);
       if(distHidden<300 && state.hearts>0){ Audio_.startHeartbeat(Math.max(0,1-distHidden/300)); } else { Audio_.stopHeartbeat(); }
       el('fearPulse').classList.toggle('on', distHidden<120 || state.afterGlowT>0);
@@ -2117,17 +2271,18 @@ function update(dt){
   if(moving){
     const len = Math.hypot(fwd,strafe); fwd/=len; strafe/=len;
     sprinting = (K.has('ShiftLeft')||K.has('ShiftRight')) && state.stamina>2;
-    const spd = (sprinting?SPRINT_SPEED:WALK_SPEED) * c.speedMult * ((!state.hardMode && state.cheats.superSpeed)?2.2:1);
+    const spd = (sprinting?SPRINT_SPEED:WALK_SPEED) * c.speedMult * ((!devCheatsBlocked() && state.cheats.superSpeed)?2.2:1);
     const fx = Math.cos(p.angle), fy = Math.sin(p.angle);
     const sx = Math.cos(p.angle+Math.PI/2), sy = Math.sin(p.angle+Math.PI/2);
     const mx = (fx*fwd + sx*strafe) * spd*dt;
     const my = (fy*fwd + sy*strafe) * spd*dt;
-    if(!state.hardMode && state.cheats.noclip){ p.x += mx; p.y += my; }
+    if(!devCheatsBlocked() && state.cheats.noclip){ p.x += mx; p.y += my; }
     else { moveEntity(p, mx, my); }
   }
   const hardMult = state.hardMode ? 3 : 1;
   if(sprinting){ state.stamina = Math.max(0,state.stamina-38*hardMult*dt); }
   else { state.stamina = Math.min(100,state.stamina+(16/hardMult)*dt); }
+  state.isSprinting = sprinting && moving;
 
   // footsteps
   if(moving){
@@ -2136,7 +2291,7 @@ function update(dt){
   }
 
   // ---- flashlight battery ----
-  if(!state.hardMode && state.cheats.infiniteBattery){
+  if(!devCheatsBlocked() && state.cheats.infiniteBattery){
     state.battery = 100; state.stamina = 100;
   } else if(state.flashlightOn){
     state.battery = Math.max(0, state.battery - 6*c.battMult*hardMult*dt);
@@ -2155,7 +2310,13 @@ function update(dt){
     const scareKey = SCARE_ROOMS[room.name];
     if(scareKey && !state.scaredRooms[scareKey]){
       state.scaredRooms[scareKey] = true;
+      if(scareKey==='generator') triggerPowerOutage();
     }
+  }
+
+  if(state.powerOutageT>0){
+    state.powerOutageT -= dt;
+    if(state.powerOutageT<=0){ state.powerOutageT=0; Audio_.powerUp(); showHint('The lights stutter back on.', 2200); }
   }
 
   // ---- item pickups ----
@@ -2165,6 +2326,11 @@ function update(dt){
       Audio_.keyChime();
       showHint(`You take the key. (${state.keysCollected}/3 keys)`, 2400);
       saveRunState();
+      if(state.keysCollected===1 && !state.orderly){
+        const wp = ORDERLY_WAYPOINTS[0];
+        state.orderly = {x:wp.x, y:wp.y, r:13, mode:'idle', waypointIdx:0, idleWaitT:0};
+        setTimeout(()=>{ if(state.screen==='playing') showHint("Something else just started moving, down in the east wing.", 3000); }, 1200);
+      }
       if(state.keysCollected>=3 && !state.hunted){
         state.hunted = true;
         setTimeout(()=>{
@@ -2180,6 +2346,14 @@ function update(dt){
       n.taken=true; state.notesCollected++;
       Audio_.pickupChime();
       showHint(`Found: "${n.title}" — press J to read your journal.`, 3200);
+      saveRunState();
+    }
+  });
+  TAPES.forEach(t=>{
+    if(!t.taken && Math.hypot(p.x-t.x,p.y-t.y)<22){
+      t.taken=true; state.tapesCollected++;
+      Audio_.tapePlay();
+      showHint(`Found a tape: "${t.title}" — press J to read the transcript.`, 3200);
       saveRunState();
     }
   });
@@ -2204,7 +2378,8 @@ function update(dt){
   }
 
   // ---- monster AI ----
-  if(state.hardMode || !state.cheats.freezeMonster) updateMonster(m,p,dt,c,false);
+  if(devCheatsBlocked() || !state.cheats.freezeMonster) updateMonster(m,p,dt,c,false);
+  if(state.orderly && (devCheatsBlocked() || !state.cheats.freezeMonster)) updateOrderly(state.orderly,p,dt);
 
   // ---- fear meter ----
   const distToMonster = Math.hypot(p.x-m.x,p.y-m.y);
@@ -2214,6 +2389,7 @@ function update(dt){
   if(distToMonster<380 && state.hearts>0){ Audio_.startHeartbeat(Math.max(0,1-distToMonster/380)); } else { Audio_.stopHeartbeat(); }
 
   // ---- monster growl: dread cue when she's closing in ----
+  state.noiseAlertCooldown -= dt;
   state.growlCooldown -= dt;
   if(distToMonster<340 && state.growlCooldown<=0 && !state.hiding){
     state.growlCooldown = 7 + Math.random()*6;
@@ -2312,7 +2488,7 @@ function updateWeapon(dt){
   if(state.stunGunCooldown>0) state.stunGunCooldown -= dt;
 
   const firing = state.firing || state.keys.has('KeyR');
-  const weaponId = state.hardMode ? 'none' : state.cheats.weapon;
+  const weaponId = devCheatsBlocked() ? 'none' : state.cheats.weapon;
 
   if(weaponId && weaponId!=='none'){
     const w = WEAPONS[weaponId];
@@ -2388,7 +2564,15 @@ function updateMonster(m,p,dt,c,hidden){
 
   // She is always coming. Slow, relentless, never stops — unless you're hidden,
   // in which case she heads for where she last saw you and waits there.
-  const speed = MONSTER_SPEED_BASE * difficultyMult() * (state.hardMode ? 1 : (state.cheats.monsterSpeedMult||1));
+  const outageSpeedMult = state.powerOutageT>0 ? 1.15 : 1;
+  const noisyNearby = !hidden && state.isSprinting && Math.hypot(m.x-p.x,m.y-p.y)<450;
+  const noiseSpeedMult = noisyNearby ? 1.3 : 1;
+  if(noisyNearby && state.noiseAlertCooldown<=0){
+    state.noiseAlertCooldown = 6;
+    Audio_.monsterGrowl();
+    showHint('She heard that.', 1600);
+  }
+  const speed = MONSTER_SPEED_BASE * difficultyMult() * outageSpeedMult * noiseSpeedMult * (devCheatsBlocked() ? 1 : (state.cheats.monsterSpeedMult||1));
 
   if(m.mode==='retreat'){
     m.retreatT -= dt;
@@ -2452,7 +2636,7 @@ function onCaught(){
   moveEntity(p, Math.cos(a)*70, Math.sin(a)*70);
   m.mode='retreat'; m.retreatT=4.5;
   state.invuln = 2.2;
-  if(!state.hardMode && state.cheats.god){
+  if(!devCheatsBlocked() && state.cheats.god){
     if(isNormalMode()) triggerJumpscare('catch');
     showHint('God Mode — no damage taken.', 2000);
     return;
@@ -2461,6 +2645,83 @@ function onCaught(){
   if(isNormalMode()) triggerJumpscare((state.hearts<=0 || state.hunted) ? 'final' : 'catch');
   if(state.hearts<=0){ setTimeout(loseGame, 650); }
   else { showHint(`You got away... barely. (${state.hearts} heart${state.hearts>1?'s':''} left)`, 2600); }
+}
+
+const ORDERLY_SPEED_BASE = MONSTER_SPEED_BASE * 1.6;
+const ORDERLY_HEAR_RADIUS = 560;
+function updateOrderly(o, p, dt){
+  const speed = ORDERLY_SPEED_BASE * difficultyMult() * (devCheatsBlocked() ? 1 : (state.cheats.monsterSpeedMult||1));
+
+  if(!state.hiding && state.isSprinting && Math.hypot(o.x-p.x,o.y-p.y)<ORDERLY_HEAR_RADIUS){
+    o.lastHeardX = p.x; o.lastHeardY = p.y;
+    o.mode = 'hunt';
+    o.idleWaitT = 0;
+  }
+
+  // catch check runs every tick regardless of movement/waiting state below — being right on top of her is exactly when this must fire
+  if(!state.hiding && state.invuln<=0 && Math.hypot(o.x-p.x,o.y-p.y) < 26){
+    onCaughtByOrderly();
+    return;
+  }
+
+  let targetX, targetY, moveSpeed;
+  if(o.mode==='hunt'){
+    targetX = o.lastHeardX; targetY = o.lastHeardY;
+    moveSpeed = speed;
+    if(Math.hypot(o.x-targetX,o.y-targetY) < 24){
+      o.idleWaitT = (o.idleWaitT||0) + dt;
+      if(o.idleWaitT > 2.5){ o.mode='idle'; o.idleWaitT=0; }
+      return;
+    }
+  } else {
+    const wp = ORDERLY_WAYPOINTS[o.waypointIdx % ORDERLY_WAYPOINTS.length];
+    targetX = wp.x; targetY = wp.y;
+    moveSpeed = speed*0.4; // ambles slowly on patrol, only truly dangerous once she's heard you
+    if(Math.hypot(o.x-targetX,o.y-targetY) < 24){ o.waypointIdx = (o.waypointIdx+1) % ORDERLY_WAYPOINTS.length; }
+  }
+
+  const targetTileX = Math.floor(targetX/TILE), targetTileY = Math.floor(targetY/TILE);
+  o.pathRecalcT = (o.pathRecalcT||0) - dt;
+  if(o.pathRecalcT<=0 || !o.path || o.pathTargetX!==targetTileX || o.pathTargetY!==targetTileY){
+    o.pathRecalcT = 0.5 + Math.random()*0.2;
+    o.path = bfsPath(Math.floor(o.x/TILE), Math.floor(o.y/TILE), targetTileX, targetTileY) || [];
+    o.pathIndex = 0;
+    o.pathTargetX = targetTileX; o.pathTargetY = targetTileY;
+  }
+  let aimX=targetX, aimY=targetY;
+  if(o.path && o.path.length>0){
+    while(o.pathIndex < o.path.length-1){
+      const [nx,ny] = o.path[o.pathIndex];
+      const cx = nx*TILE+TILE/2, cy = ny*TILE+TILE/2;
+      if(Math.hypot(o.x-cx,o.y-cy) < 16) o.pathIndex++;
+      else break;
+    }
+    const [nx,ny] = o.path[Math.min(o.pathIndex,o.path.length-1)];
+    aimX = nx*TILE+TILE/2; aimY = ny*TILE+TILE/2;
+  }
+  const ang = Math.atan2(aimY-o.y, aimX-o.x);
+  const prevX=o.x, prevY=o.y;
+  moveEntity(o, Math.cos(ang)*moveSpeed*dt, Math.sin(ang)*moveSpeed*dt);
+
+  if(Math.hypot(o.x-prevX,o.y-prevY) < 0.5){
+    o.stuckT = (o.stuckT||0) + dt;
+    if(o.stuckT>0.4){
+      const perp = ang + (Math.random()<0.5?1:-1)*Math.PI/2;
+      moveEntity(o, Math.cos(perp)*moveSpeed*dt, Math.sin(perp)*moveSpeed*dt);
+      o.stuckT=0; o.pathRecalcT=0;
+    }
+  } else { o.stuckT=0; }
+}
+function onCaughtByOrderly(){
+  const o = state.orderly, p = state.player;
+  const a = Math.atan2(p.y-o.y, p.x-o.x);
+  moveEntity(p, Math.cos(a)*70, Math.sin(a)*70);
+  o.mode='idle'; o.idleWaitT=0;
+  state.invuln = 2.2;
+  if(!devCheatsBlocked() && state.cheats.god){ showHint('God Mode — no damage taken.', 2000); return; }
+  state.hearts--;
+  if(state.hearts<=0){ setTimeout(loseGame, 650); }
+  else { showHint(`The Orderly grabs at you — you wrench free. (${state.hearts} heart${state.hearts>1?'s':''} left)`, 2600); }
 }
 
 function winGame(){
@@ -2473,11 +2734,11 @@ function winGame(){
   if(unlockSkin('crimson')) unlocked.push('Crimson Ward');
   if(state.nightmare && unlockSkin('spectral')) unlocked.push('Spectral Blue');
   if(state.notesCollected>=NOTES.length && unlockSkin('gold')) unlocked.push('Gilded');
-  let stats = `Survived ${formatTime(state.elapsed)} · ${state.notesCollected}/${NOTES.length} pages found`;
+  let stats = `Survived ${formatTime(state.elapsed)} · ${state.notesCollected}/${NOTES.length} pages · ${state.tapesCollected}/${TAPES.length} tapes found`;
   if(isBest) stats += '  —  NEW BEST TIME';
   if(unlocked.length) stats += `\nNew skin unlocked: ${unlocked.join(', ')} (see Settings)`;
   if(state.usedCheatsThisRun){ stats += '\n(Dev tools were used — flagged as such on the leaderboard)'; }
-  const lbMode = state.hardMode ? 'hard' : (state.nightmare ? 'nightmare' : 'normal');
+  const lbMode = state.dailyChallenge ? 'daily' : (state.hardMode ? 'hard' : (state.nightmare ? 'nightmare' : 'normal'));
   submitScore(state.elapsed, lbMode, state.usedCheatsThisRun);
   el('winStats').textContent = stats;
   show('winScreen');
@@ -2721,6 +2982,12 @@ const stunTex = makeSpriteTex(48,(c)=>{
   c.fillStyle='#3a3a3a'; c.fillRect(-13,-4,18,7); c.fillRect(-5,3,8,9);
   c.fillStyle='#5ec7d9'; c.fillRect(7,-5,6,9);
 });
+const tapeTex = makeSpriteTex(48,(c)=>{
+  c.shadowColor='#c98a3a'; c.shadowBlur=6;
+  c.fillStyle='#2a221a'; c.fillRect(-12,-8,24,16);
+  c.fillStyle='#000'; c.beginPath(); c.arc(-5,0,4,0,Math.PI*2); c.arc(5,0,4,0,Math.PI*2); c.fill();
+  c.strokeStyle='#c98a3a'; c.lineWidth=1; c.strokeRect(-12,-8,24,16);
+});
 function hideTexFactory(near){
   return makeSpriteTex(48,(c)=>{
     if(near){ c.shadowColor='#c5281e'; c.shadowBlur=12; }
@@ -2824,17 +3091,71 @@ function drawMonsterCanvas(proximity){
   c.restore();
 }
 
-let keySprites=[], noteSprites=[], stunSprites=[], hideSprites=[], exitSprite=null, monsterSprite=null;
+const orderlyCanvasEl = document.createElement('canvas'); orderlyCanvasEl.width=100; orderlyCanvasEl.height=150;
+const orderlyCanvasCtx = orderlyCanvasEl.getContext('2d');
+const orderlyTex = new THREE.CanvasTexture(orderlyCanvasEl);
+function drawOrderlyCanvas(hunting){
+  const c = orderlyCanvasCtx;
+  c.clearRect(0,0,100,150);
+  c.save();
+  c.translate(50,94);
+  c.scale(2,2);
+  const t = performance.now();
+
+  c.strokeStyle = '#c9c2b4';
+  c.lineWidth = 6;
+  c.lineCap = 'round';
+  for(const side of [-1,1]){
+    const swing = Math.sin(t/300 + side*1.4)*(hunting?9:4);
+    c.beginPath();
+    c.moveTo(side*9,-4); c.lineTo(side*15,14+swing); c.lineTo(side*13,26+swing);
+    c.stroke();
+  }
+
+  c.fillStyle = '#d8d2c2'; // pale smock, no stains — she doesn't need to see what's on it
+  c.beginPath();
+  c.moveTo(-11,-7); c.lineTo(11,-7); c.lineTo(14,28); c.lineTo(-14,28);
+  c.closePath(); c.fill();
+
+  c.fillStyle = '#cfc6b8';
+  c.fillRect(-3,-11,6,6);
+  c.beginPath(); c.arc(0,-17,9,0,Math.PI*2); c.fill();
+
+  c.fillStyle = '#5a5248'; // thin, lank hair
+  c.beginPath();
+  for(let i=0;i<=8;i++){
+    const ang = Math.PI + (i/8)*Math.PI;
+    const rad = 9.5+Math.sin(ang*7+t/260)*2;
+    const x = Math.cos(ang)*rad, y = -17+Math.sin(ang)*rad*0.95;
+    if(i===0) c.moveTo(x,y); else c.lineTo(x,y);
+  }
+  c.closePath(); c.fill();
+
+  c.fillStyle = '#1a1714'; // blindfold — she hunts by sound alone
+  c.fillRect(-9,-19.5,18,4.5);
+
+  if(hunting){
+    c.globalAlpha = 0.6+0.3*Math.sin(t/90);
+    c.strokeStyle = '#2a0a0a'; c.lineWidth=1.3;
+    c.beginPath(); c.moveTo(-5,-12); c.lineTo(5,-12); c.stroke();
+    c.globalAlpha = 1;
+  }
+  c.restore();
+}
+
+let keySprites=[], noteSprites=[], tapeSprites=[], stunSprites=[], hideSprites=[], exitSprite=null, monsterSprite=null, orderlySprite=null;
 function build3DItems(){
   // setupItems() re-randomizes KEYS/NOTES/STUNITEMS/HIDESPOTS/EXIT_PX on every new game (resetGameState -> setupItems),
   // so the sprites built from the previous layout must be torn down or they'd go stale and silently desync from pickup checks
   keySprites.forEach(s=>scene.remove(s));
   noteSprites.forEach(s=>scene.remove(s));
+  tapeSprites.forEach(s=>scene.remove(s));
   stunSprites.forEach(s=>scene.remove(s));
   hideSprites.forEach(s=>scene.remove(s));
 
   keySprites = KEYS.map(k=>{ const s=makeSprite(keyTex,22); s.position.set(k.x,EYE_HEIGHT,k.y); scene.add(s); return s; });
   noteSprites = NOTES.map(n=>{ const s=makeSprite(noteTex,18); s.position.set(n.x,EYE_HEIGHT,n.y); scene.add(s); return s; });
+  tapeSprites = TAPES.map(t=>{ const s=makeSprite(tapeTex,16); s.position.set(t.x,EYE_HEIGHT,t.y); scene.add(s); return s; });
   stunSprites = STUNITEMS.map(st=>{ const s=makeSprite(stunTex,18); s.position.set(st.x,EYE_HEIGHT,st.y); scene.add(s); return s; });
   hideSprites = HIDESPOTS.map(h=>{ const s=makeSprite(hideTexFar,30); s.position.set(h.x,EYE_HEIGHT,h.y); s.userData.near=false; scene.add(s); return s; });
 
@@ -2847,6 +3168,13 @@ function build3DItems(){
     monsterSprite.scale.set(44*(110/160), 44, 1);
     scene.add(monsterSprite);
   }
+  if(!orderlySprite){
+    orderlySprite = new THREE.Sprite(new THREE.SpriteMaterial({map:orderlyTex, transparent:true}));
+    orderlySprite.center.set(0.5, 0.04);
+    orderlySprite.scale.set(42*(100/150), 42, 1);
+    orderlySprite.visible = false;
+    scene.add(orderlySprite);
+  }
 }
 
 const _camDir = new THREE.Vector3();
@@ -2856,9 +3184,11 @@ function update3DScene(){
   camera.rotation.set(0, -(p.angle+Math.PI/2), 0);
 
   const flicker = 1 - (Math.sin(performance.now()/231)*0.025 + Math.sin(performance.now()/97)*0.02);
+  const outageMult = state.powerOutageT>0 ? 0.12 : 1;
   nearLight.position.set(p.x, EYE_HEIGHT, p.y);
-  nearLight.intensity = 2.2*flicker;
-  nearLight.distance = TILE*4.3*flicker;
+  nearLight.intensity = 2.2*flicker*outageMult;
+  nearLight.distance = TILE*4.3*flicker*outageMult;
+  ambientLight.intensity = 0.55*outageMult;
   if(state.flashlightOn){
     flashLight.intensity = 6*flicker*(1+(state.fear>0.6?Math.sin(performance.now()/60)*0.08:0));
     flashLight.distance = TILE*10.8*flicker;
@@ -2866,7 +3196,7 @@ function update3DScene(){
     scene.fog.far = TILE*10.8*flicker;
   } else {
     flashLight.intensity = 0;
-    scene.fog.far = TILE*4.3*flicker;
+    scene.fog.far = TILE*4.3*flicker*outageMult;
   }
   flashLight.position.copy(camera.position);
   camera.getWorldDirection(_camDir);
@@ -2874,6 +3204,7 @@ function update3DScene(){
 
   KEYS.forEach((k,i)=>{ if(keySprites[i]) keySprites[i].visible = !k.taken; });
   NOTES.forEach((n,i)=>{ if(noteSprites[i]) noteSprites[i].visible = !n.taken; });
+  TAPES.forEach((t,i)=>{ if(tapeSprites[i]) tapeSprites[i].visible = !t.taken; });
   STUNITEMS.forEach((st,i)=>{ if(stunSprites[i]) stunSprites[i].visible = !st.taken; });
   HIDESPOTS.forEach((h,i)=>{
     const s = hideSprites[i]; if(!s) return;
@@ -2901,11 +3232,23 @@ function update3DScene(){
     drawMonsterCanvas(proximity);
     monsterTex.needsUpdate = true;
     monsterSprite.position.set(state.monster.x, 0, state.monster.y);
-    const xrayOn = !state.hardMode && state.cheats.xray;
+    const xrayOn = !devCheatsBlocked() && state.cheats.xray;
     monsterSprite.material.depthTest = !xrayOn;
     monsterSprite.renderOrder = xrayOn ? 999 : 0;
   } else {
     monsterSprite.visible = false;
+  }
+
+  if(state.orderly){
+    orderlySprite.visible = true;
+    drawOrderlyCanvas(state.orderly.mode==='hunt');
+    orderlyTex.needsUpdate = true;
+    orderlySprite.position.set(state.orderly.x, 0, state.orderly.y);
+    const xrayOn = !devCheatsBlocked() && state.cheats.xray;
+    orderlySprite.material.depthTest = !xrayOn;
+    orderlySprite.renderOrder = xrayOn ? 999 : 0;
+  } else if(orderlySprite){
+    orderlySprite.visible = false;
   }
 
   renderer.render(scene, camera);
@@ -2939,7 +3282,7 @@ function drawViewmodel(){
 }
 
 function drawWeaponViewmodel(){
-  const weaponId = state.hardMode ? 'none' : state.cheats.weapon;
+  const weaponId = devCheatsBlocked() ? 'none' : state.cheats.weapon;
   if(!weaponId || weaponId==='none' || state.hiding) return;
   const w = WEAPONS[weaponId];
   if(!w) return;
@@ -2980,7 +3323,7 @@ function drawWeaponViewmodel(){
 
 function drawStunGunViewmodel(){
   if(!state.hasStunGun || state.hiding) return;
-  if(!state.hardMode && state.cheats.weapon && state.cheats.weapon!=='none') return; // dev weapon takes over the hands
+  if(!devCheatsBlocked() && state.cheats.weapon && state.cheats.weapon!=='none') return; // dev weapon takes over the hands
   const kick = state.weaponKickT>0 ? (state.weaponKickT/0.18)*14 : 0;
   const bob = Math.sin(performance.now()/220)*4;
   ctx.save();
@@ -2994,7 +3337,7 @@ function drawStunGunViewmodel(){
   ctx.fillRect(6,-134,8,12);
   ctx.restore();
 
-  if(state.muzzleFlashT>0 && (state.hardMode || !state.cheats.weapon || state.cheats.weapon==='none')){
+  if(state.muzzleFlashT>0 && (devCheatsBlocked() || !state.cheats.weapon || state.cheats.weapon==='none')){
     const a = state.muzzleFlashT/0.12;
     ctx.save();
     ctx.globalAlpha = a;
@@ -3025,7 +3368,7 @@ function drawMinimap(){
 
   const scale = Math.min((panelW-10)/(MAPW*TILE), (panelH-10)/(MAPH*TILE));
   const offX = px0+5, offY = py0+5;
-  const reveal = !state.hardMode && state.cheats.revealMap;
+  const reveal = !devCheatsBlocked() && state.cheats.revealMap;
 
   ROOMS.forEach((r,i)=>{
     if(!reveal && !state.visitedRooms[i]) return;
@@ -3069,7 +3412,7 @@ function render(){
   drawWeaponViewmodel();
   drawStunGunViewmodel();
   if(state.minimapOn) drawMinimap();
-  if(!state.hardMode && state.cheats.debugInfo) drawDebugInfo();
+  if(!devCheatsBlocked() && state.cheats.debugInfo) drawDebugInfo();
 }
 
 function drawDebugInfo(){

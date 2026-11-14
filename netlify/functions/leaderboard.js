@@ -2,7 +2,7 @@ import { getStore } from "@netlify/blobs";
 
 const MAX_STORED = 100;
 const TOP_N = 10;
-const MODES = ["normal", "nightmare", "hard"];
+const MODES = ["normal", "nightmare", "hard", "daily"];
 
 function modeOf(e){
   if (MODES.includes(e.mode)) return e.mode;
@@ -10,15 +10,17 @@ function modeOf(e){
 }
 
 function topFor(data, mode){
-  return data
-    .filter(e => modeOf(e) === mode)
-    .slice()
-    .sort((a,b)=>a.time-b.time)
-    .slice(0, TOP_N);
+  let pool = data.filter(e => modeOf(e) === mode);
+  if (mode === "daily" && pool.length) {
+    // only the most recent day's entries count as "today's" challenge — sidesteps server/client timezone drift
+    const latestDay = pool.reduce((max, e) => ((e.day || "") > max ? (e.day || "") : max), "");
+    pool = pool.filter(e => (e.day || "") === latestDay);
+  }
+  return pool.slice().sort((a,b)=>a.time-b.time).slice(0, TOP_N);
 }
 
 function allLists(data){
-  return { normal: topFor(data,"normal"), nightmare: topFor(data,"nightmare"), hard: topFor(data,"hard") };
+  return { normal: topFor(data,"normal"), nightmare: topFor(data,"nightmare"), hard: topFor(data,"hard"), daily: topFor(data,"daily") };
 }
 
 export default async (req) => {
@@ -41,12 +43,13 @@ export default async (req) => {
     const character = String(payload.character || "").slice(0, 30);
     const mode = MODES.includes(payload.mode) ? payload.mode : (payload.nightmare ? "nightmare" : "normal");
     const cheated = !!payload.cheated;
+    const day = mode === "daily" ? String(payload.day || "").slice(0, 10) : undefined;
     if (!isFinite(time) || time <= 0 || time > 36000) {
       return new Response("Invalid score", { status: 400 });
     }
 
     const data = (await store.get("scores", { type: "json" })) || [];
-    data.push({ name, time, character, mode, cheated, at: Date.now() });
+    data.push({ name, time, character, mode, cheated, day, at: Date.now() });
 
     // keep the dataset bounded: top MAX_STORED per mode, sorted by time
     let trimmed = [];
